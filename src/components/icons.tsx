@@ -51,6 +51,19 @@ export const DownloadIcon = (p: P) => (
   </svg>
 )
 
+export const MicIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+  </svg>
+)
+
+export const StopIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" />
+  </svg>
+)
+
 export const SearchIcon = (p: P) => (
   <svg {...base} {...p}>
     <circle cx="11" cy="11" r="7" />

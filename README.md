@@ -40,6 +40,7 @@ L'application s'ouvre alors en plein écran sur le dernier projet consulté.
 
 - PC : taper au clavier n'importe où sur le tableau commence une nouvelle issue, glisser-déposer entre colonnes. `/` ouvre la recherche, Échap ferme la fiche ou revient aux projets.
 - Téléphone et tablette : une colonne à la fois, glisser le doigt à gauche ou à droite pour changer. Bouton `+`, Entrée enregistre et laisse le champ ouvert pour la suivante. Appui long pour réordonner. Loupe en haut pour la recherche.
+- Dictée : dans la fiche, le micro sous les notes enregistre, un second appui arrête et ajoute la transcription aux notes (Groq, Whisper Large V3, en français). La clé API Groq est demandée au premier usage et enregistrée dans les métadonnées du compte Supabase, donc partagée entre appareils. Une clé refusée est effacée et redemandée. Nécessite HTTPS : absent avec le serveur de dev ouvert sur le réseau local.
 - La recherche est approchée (lettres dans l'ordre, sans tenir compte des accents) et porte sur les titres et les notes des issues À faire et En cours.
 - Les issues terminées depuis plus de 7 jours quittent la colonne Fait pour un volet replié en bas de celle-ci.
 - Le rond à gauche d'une carte fait avancer le statut (À faire → En cours → Fait).

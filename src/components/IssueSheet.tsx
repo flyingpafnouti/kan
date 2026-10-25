@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { PRIORITIES, STATUSES, type Issue, type Priority, type Status } from '../lib/types'
+import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { StatusIcon } from './StatusIcon'
+import { MicIcon, StopIcon } from './icons'
 
 interface Props {
   issue: Issue
@@ -44,6 +46,13 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
     onClose()
   }
 
+  // The transcript is appended to the notes; a result landing after close is still saved by the pending timer.
+  const dictation = useDictation((text) => {
+    const b = body.trim() ? `${body.trimEnd()}${body.endsWith('\n') ? '' : ' '}${text}` : text
+    setBody(b)
+    schedule(title, b)
+  })
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -78,9 +87,45 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
               schedule(title, v)
             }}
             className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"
-            placeholder="Notes…"
+            placeholder={
+              dictation.state === 'recording'
+                ? 'Parlez…'
+                : dictation.state === 'transcribing'
+                  ? 'Transcription…'
+                  : 'Notes…'
+            }
           />
-          <p className="pt-3 pb-3 text-xs text-neutral-400">Modifié le {formatDate(issue.updated_at)}</p>
+          <div className="flex items-center justify-between gap-2 py-2">
+            <p className="text-xs text-neutral-400">
+              {dictation.state === 'transcribing' ? 'Transcription…' : `Modifié le ${formatDate(issue.updated_at)}`}
+            </p>
+            {dictationSupported && (
+              <div className="flex items-center gap-2">
+                {dictation.state === 'recording' && (
+                  <div className="h-1 w-16 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+                    <div ref={dictation.meter} className="h-full origin-left scale-x-0 rounded-full bg-red-500/70" />
+                  </div>
+                )}
+                <button
+                  aria-label={dictation.state === 'recording' ? 'Arrêter la dictée' : 'Dicter les notes'}
+                  title={dictation.state === 'recording' ? 'Arrêter la dictée' : 'Dicter les notes'}
+                  onClick={dictation.toggle}
+                  disabled={dictation.state === 'starting' || dictation.state === 'transcribing'}
+                  className={`-mr-1 rounded-full p-1.5 transition ${
+                    dictation.state === 'recording'
+                      ? 'animate-pulse text-red-500'
+                      : 'text-neutral-300 hover:text-neutral-500 disabled:opacity-40 dark:text-neutral-600 dark:hover:text-neutral-400'
+                  }`}
+                >
+                  {dictation.state === 'recording' ? (
+                    <StopIcon width={16} height={16} />
+                  ) : (
+                    <MicIcon width={16} height={16} />
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <div className="space-y-3 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
           <div className="grid grid-cols-4 gap-2">
