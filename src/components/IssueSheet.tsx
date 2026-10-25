@@ -12,6 +12,10 @@ interface Props {
 
 const SAVE_DELAY = 600
 
+const DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+const TIME = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' })
+const formatDate = (iso: string) => `${DAY.format(new Date(iso))} à ${TIME.format(new Date(iso))}`
+
 export function IssueSheet({ issue, onSave, onStatus, onDelete, onClose }: Props) {
   const [title, setTitle] = useState(issue.title)
   const [body, setBody] = useState(issue.body)
@@ -70,6 +74,7 @@ export function IssueSheet({ issue, onSave, onStatus, onDelete, onClose }: Props
             className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"
             placeholder="Notes…"
           />
+          <p className="pt-3 pb-3 text-xs text-neutral-400">Modifié le {formatDate(issue.updated_at)}</p>
         </div>
         <div className="space-y-3 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
           <div className="grid grid-cols-3 gap-2">

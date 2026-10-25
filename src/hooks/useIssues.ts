@@ -94,7 +94,8 @@ export function useIssues(projectId: string) {
 
   const update = useCallback(
     async (id: string, patch: Partial<Pick<Issue, 'title' | 'body' | 'status' | 'position'>>) => {
-      setIssues((list) => list?.map((x) => (x.id === id ? { ...x, ...patch } : x)) ?? null)
+      const updated_at = new Date().toISOString()
+      setIssues((list) => list?.map((x) => (x.id === id ? { ...x, ...patch, updated_at } : x)) ?? null)
       const { error } = await supabase.from('issues').update(patch).eq('id', id)
       if (error) fail('Enregistrement impossible')
     },
