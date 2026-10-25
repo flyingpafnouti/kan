@@ -109,13 +109,39 @@ export function useIssues(projectId: string) {
     [update, column],
   )
 
-  const remove = useCallback(
-    async (id: string) => {
-      setIssues((list) => list?.filter((x) => x.id !== id) ?? null)
-      const { error } = await supabase.from('issues').delete().eq('id', id)
-      if (error) fail('Suppression impossible')
+  /** Re-insert a deleted issue as it was (same id, position and dates). */
+  const restore = useCallback(
+    async (issue: Issue) => {
+      setIssues((list) => (list && !list.some((x) => x.id === issue.id) ? [...list, issue] : list))
+      pending.current.add(issue.id)
+      const { project_id, title, body, status, position, created_at, updated_at } = issue
+      const { error } = await supabase
+        .from('issues')
+        .insert({ id: issue.id, project_id, title, body, status, position, created_at, updated_at })
+      pending.current.delete(issue.id)
+      if (error) fail('Restauration impossible')
     },
     [fail],
+  )
+
+  const remove = useCallback(
+    (issue: Issue) => {
+      setIssues((list) => list?.filter((x) => x.id !== issue.id) ?? null)
+      const deleted = supabase
+        .from('issues')
+        .delete()
+        .eq('id', issue.id)
+        .then(({ error }) => {
+          if (error) fail('Suppression impossible')
+          return !error
+        })
+      toast('Issue supprimée', {
+        duration: 10_000,
+        // Wait for the delete to land so the re-insert cannot hit a duplicate key.
+        action: { label: 'Annuler', run: () => void deleted.then((ok) => { if (ok) restore(issue) }) },
+      })
+    },
+    [fail, restore],
   )
 
   return { issues, setIssues, column, add, update, setStatus, remove }

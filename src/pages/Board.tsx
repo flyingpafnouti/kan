@@ -183,7 +183,7 @@ export function Board({ projectId }: { projectId: string }) {
           onSave={(patch) => update(open.id, patch)}
           onStatus={(s) => setStatus(open.id, s)}
           onDelete={() => {
-            remove(open.id)
+            remove(open)
             setOpenId(null)
           }}
           onClose={() => setOpenId(null)}

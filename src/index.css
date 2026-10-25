@@ -40,3 +40,8 @@
 }
 .animate-sheet { animation: sheet-in 160ms ease-out; }
 .animate-fade { animation: fade-in 120ms ease-out; }
+
+@keyframes shrink {
+  to { transform: scaleX(0); }
+}
+.toast-progress { animation: shrink linear forwards; }
