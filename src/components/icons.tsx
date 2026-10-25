@@ -44,3 +44,9 @@ export const ChevronIcon = (p: P) => (
     <path d="m9 18 6-6-6-6" />
   </svg>
 )
+
+export const DownloadIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+  </svg>
+)

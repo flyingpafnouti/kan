@@ -25,7 +25,8 @@ import { IssueCard } from '../components/IssueCard'
 import { IssueSheet } from '../components/IssueSheet'
 import { StatusTabs } from '../components/StatusTabs'
 import { QuickAddInline, QuickAddMobile } from '../components/QuickAdd'
-import { BackIcon } from '../components/icons'
+import { BackIcon, DownloadIcon } from '../components/icons'
+import { boardToMarkdown, downloadMarkdown } from '../lib/markdown'
 import { SyncBadge } from '../components/SyncBadge'
 
 const isStatus = (id: UniqueIdentifier): id is Status => STATUSES.some((s) => s.id === id)
@@ -131,8 +132,18 @@ export function Board({ projectId }: { projectId: string }) {
             <BackIcon width={22} height={22} />
           </button>
           <h1 className="truncate text-xl font-semibold tracking-tight">{project?.name ?? ''}</h1>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
             <SyncBadge />
+            {project && issues && (
+              <button
+                onClick={() => downloadMarkdown(project.name, boardToMarkdown(project.name, column))}
+                aria-label="Télécharger en Markdown"
+                title="Télécharger en Markdown"
+                className="-mr-1.5 rounded-lg p-1.5 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+              >
+                <DownloadIcon />
+              </button>
+            )}
           </div>
         </div>
         {!desktop && (
