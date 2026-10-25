@@ -45,7 +45,12 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
   }
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      // Keeps the board from also handling this Escape as "back to projects".
+      e.preventDefault()
+      close()
+    }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
   })

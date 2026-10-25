@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { hasSession, supabase } from '../lib/supabase'
-import type { Issue, Status } from '../lib/types'
+import { doneAtFor, type Issue, type Status } from '../lib/types'
 import { between, byPosition } from '../lib/position'
 import { uuid } from '../lib/id'
 import { toast } from '../lib/toast'
@@ -9,7 +9,7 @@ import { readCache, writeCache } from '../lib/cache'
 import { enqueue, onReject, overlay, overlayRow } from '../lib/outbox'
 import { useRefetchOnFocus } from './useRefetchOnFocus'
 
-const COLUMNS = 'id, project_id, title, body, status, priority, position, created_at, updated_at'
+const COLUMNS = 'id, project_id, title, body, status, priority, position, created_at, updated_at, done_at'
 
 export function useIssues(projectId: string) {
   const cacheKey = `issues:${projectId}`
@@ -82,6 +82,7 @@ export function useIssues(projectId: string) {
         position: between(undefined, column('todo')[0]?.position),
         created_at: now,
         updated_at: now,
+        done_at: null,
       }
       setIssues((list) => [...(list ?? []), row])
       enqueue({ table: 'issues', id: row.id, kind: 'upsert', data: { ...row } })
@@ -91,7 +92,14 @@ export function useIssues(projectId: string) {
 
   const update = useCallback((id: string, patch: Partial<Pick<Issue, 'title' | 'body' | 'status' | 'priority' | 'position'>>) => {
     const updated_at = new Date().toISOString()
-    setIssues((list) => list?.map((x) => (x.id === id ? { ...x, ...patch, updated_at } : x)) ?? null)
+    setIssues(
+      (list) =>
+        list?.map((x) =>
+          x.id === id
+            ? { ...x, ...patch, updated_at, done_at: patch.status ? doneAtFor(x, patch.status) : x.done_at }
+            : x,
+        ) ?? null,
+    )
     enqueue({ table: 'issues', id, kind: 'update', data: patch })
   }, [])
 

@@ -18,7 +18,9 @@ create table public.issues (
   priority   smallint check (priority between 0 and 3),
   position   float8 not null default 0,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  -- Set by issues_done_at when the issue enters "done", cleared when it leaves.
+  done_at    timestamptz
 );
 
 create index issues_project_idx on public.issues (project_id, status, position);
@@ -33,6 +35,20 @@ end $$;
 
 create trigger issues_touch before update on public.issues
 for each row execute function public.touch_updated_at();
+
+create function public.set_done_at() returns trigger
+language plpgsql as $$
+begin
+  if new.status <> 'done' then
+    new.done_at = null;
+  elsif new.done_at is null then
+    new.done_at = now();
+  end if;
+  return new;
+end $$;
+
+create trigger issues_done_at before insert or update on public.issues
+for each row execute function public.set_done_at();
 
 alter table public.projects enable row level security;
 alter table public.issues   enable row level security;

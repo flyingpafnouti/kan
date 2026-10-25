@@ -55,4 +55,19 @@ export interface Issue {
   position: number
   created_at: string
   updated_at: string
+  /** When the issue entered "done". Missing on rows cached before the column existed. */
+  done_at?: string | null
 }
+
+/** Done issues leave the "Fait" column for its archive drawer after this long. */
+const ARCHIVE_AFTER_MS = 7 * 24 * 3600 * 1000
+
+/** done_at after moving `issue` to `status`; mirrors the issues_done_at trigger. */
+export const doneAtFor = (issue: Issue, status: Status) =>
+  status === 'done' ? (issue.done_at ?? new Date().toISOString()) : null
+
+/** Rows done before done_at existed fall back on their last change. */
+export const doneSince = (issue: Issue) => issue.done_at ?? issue.updated_at
+
+export const isArchived = (issue: Issue, now = Date.now()) =>
+  issue.status === 'done' && now - Date.parse(doneSince(issue)) > ARCHIVE_AFTER_MS

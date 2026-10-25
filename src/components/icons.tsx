@@ -50,3 +50,10 @@ export const DownloadIcon = (p: P) => (
     <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
   </svg>
 )
+
+export const SearchIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </svg>
+)

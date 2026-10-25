@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useKeyboardInset } from '../hooks/useKeyboardInset'
 import { PlusIcon, SendIcon } from './icons'
 
-/** Desktop: inline field on top of the "À faire" column, focused with the N key. */
+/** Desktop: inline field on top of the "À faire" column, focused by typing anywhere on the board. */
 export const QuickAddInline = forwardRef<HTMLInputElement, { onAdd: (title: string) => void }>(function QuickAddInline(
   { onAdd },
   ref,
@@ -21,7 +21,7 @@ export const QuickAddInline = forwardRef<HTMLInputElement, { onAdd: (title: stri
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
-        placeholder="Nouvelle issue…  (N)"
+        placeholder="Nouvelle issue…"
         className="w-full rounded-xl border border-dashed border-neutral-300 bg-transparent px-3 py-2.5 text-[15px] outline-none focus:border-solid focus:border-accent dark:border-neutral-700"
       />
     </form>
