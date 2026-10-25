@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 
-export type Route = { name: 'projects' } | { name: 'board'; projectId: string }
+export type Route = { name: 'projects' } | { name: 'all' } | { name: 'board'; projectId: string }
 
 function parse(hash: string): Route {
+  if (hash.startsWith('#/all')) return { name: 'all' }
   const m = hash.match(/^#\/p\/([\w-]+)/)
   return m ? { name: 'board', projectId: m[1] } : { name: 'projects' }
 }
@@ -18,7 +19,7 @@ export function useRoute(): Route {
 }
 
 export function navigate(route: Route) {
-  location.hash = route.name === 'board' ? `#/p/${route.projectId}` : '#/'
+  location.hash = route.name === 'board' ? `#/p/${route.projectId}` : route.name === 'all' ? '#/all' : '#/'
 }
 
 const LAST_KEY = 'last-project'

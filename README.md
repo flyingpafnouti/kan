@@ -1,6 +1,6 @@
 # Issues
 
-Suivi d'issues minimaliste en Kanban (À faire / En cours / Fait), synchronisé entre appareils via Supabase. Application web installable sur téléphone (PWA), hébergée sur GitHub Pages.
+Suivi d'issues minimaliste en Kanban (To do / In progress / Done), synchronisé entre appareils via Supabase. Application web en anglais, installable sur téléphone (PWA), hébergée sur GitHub Pages.
 
 ## Mise en place Supabase
 
@@ -38,10 +38,13 @@ L'application s'ouvre alors en plein écran sur le dernier projet consulté.
 
 ## Utilisation
 
-- PC : taper au clavier n'importe où sur le tableau commence une nouvelle issue, glisser-déposer entre colonnes. `/` ouvre la recherche, Échap ferme la fiche ou revient aux projets.
+- PC : taper au clavier n'importe où sur le tableau commence une nouvelle issue, glisser-déposer entre colonnes. `/` ouvre la recherche, Échap ferme la fiche ou revient aux projets ; Retour arrière revient aussi aux projets.
+- Clavier : les flèches choisissent un projet ou une issue, Entrée l'ouvre. Sur le tableau, Alt + ↑ / ↓ déplace l'issue choisie dans sa colonne et Alt + ← / → change son statut. Dans la fiche, Alt + ↑ / ↓ (ou les chevrons à côté du titre) passe à l'issue précédente ou suivante de la colonne, même avec le curseur dans le texte, et Alt + ← / → change son statut. Alt + ← / → ne fait jamais revenir en arrière dans le navigateur. Le récapitulatif s'ouvre avec `?` ou le lien « Keyboard shortcuts » en bas de la page des projets.
 - Téléphone et tablette : une colonne à la fois, glisser le doigt à gauche ou à droite pour changer. Bouton `+`, Entrée enregistre et laisse le champ ouvert pour la suivante. Appui long pour réordonner. Loupe en haut pour la recherche.
 - Dictée : dans la fiche, le micro sous les notes enregistre, un second appui arrête et ajoute la transcription aux notes (Groq, Whisper Large V3, en français). La clé API Groq est demandée au premier usage et enregistrée dans les métadonnées du compte Supabase, donc partagée entre appareils. Une clé refusée est effacée et redemandée. Nécessite HTTPS : absent avec le serveur de dev ouvert sur le réseau local.
-- La recherche est approchée (lettres dans l'ordre, sans tenir compte des accents) et porte sur les titres et les notes des issues À faire et En cours.
-- Les issues terminées depuis plus de 7 jours quittent la colonne Fait pour un volet replié en bas de celle-ci.
-- Le rond à gauche d'une carte fait avancer le statut (À faire → En cours → Fait).
+- « All issues », en haut de la liste des projets, réunit les issues de tous les projets, triées par priorité puis par projet, avec le nom du projet sur chaque carte. On y change le statut et on ouvre les fiches, mais on n'y crée ni ne réordonne d'issue.
+- Thème : suit le réglage clair / sombre du système jusqu'au premier appui sur le soleil / la lune en haut de la page des projets. Le choix est ensuite gardé sur l'appareil.
+- La recherche est approchée (lettres dans l'ordre, sans tenir compte des accents) et porte sur les titres et les notes des issues To do et In progress.
+- Les issues terminées depuis plus de 7 jours quittent la colonne Done pour un volet replié en bas de celle-ci.
+- Le rond à gauche d'une carte fait avancer le statut (To do → In progress → Done).
 - Toucher une carte ouvre la fiche : titre, notes, statut, suppression. Enregistrement automatique.

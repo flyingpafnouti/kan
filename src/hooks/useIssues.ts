@@ -11,21 +11,24 @@ import { useRefetchOnFocus } from './useRefetchOnFocus'
 
 const COLUMNS = 'id, project_id, title, body, status, priority, position, created_at, updated_at, done_at'
 
-export function useIssues(projectId: string) {
-  const cacheKey = `issues:${projectId}`
+/** Issues of one project, or of all projects when projectId is null. */
+export function useIssues(projectId: string | null) {
+  const cacheKey = `issues:${projectId ?? 'all'}`
+  const belongs = useCallback((r: Record<string, unknown>) => !projectId || r.project_id === projectId, [projectId])
   const [issues, setIssues] = useState<Issue[] | null>(() => {
     const cached = readCache<Issue[]>(cacheKey)
-    return cached && overlay('issues', cached, (r) => r.project_id === projectId)
+    return cached && overlay('issues', cached, belongs)
   })
 
   const load = useCallback(async () => {
+    const query = supabase.from('issues').select(COLUMNS)
     const { data, error } = (await hasSession())
-      ? await supabase.from('issues').select(COLUMNS).eq('project_id', projectId)
+      ? await (projectId ? query.eq('project_id', projectId) : query)
       : { data: null, error: true }
     // Offline: keep the cached state (or show an empty board if there is none).
-    if (error || !data) return setIssues((list) => list ?? overlay('issues', [], (r) => r.project_id === projectId))
-    setIssues(overlay('issues', data as Issue[], (r) => r.project_id === projectId))
-  }, [projectId])
+    if (error || !data) return setIssues((list) => list ?? overlay('issues', [], belongs))
+    setIssues(overlay('issues', data as Issue[], belongs))
+  }, [projectId, belongs])
 
   useEffect(() => {
     if (issues) writeCache(cacheKey, issues)
@@ -45,10 +48,11 @@ export function useIssues(projectId: string) {
         return next
       })
     }
+    const filter = projectId ? { filter: `project_id=eq.${projectId}` } : {}
     const channel = supabase
-      .channel(`issues:${projectId}:${uuid()}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'issues', filter: `project_id=eq.${projectId}` }, upsert)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'issues', filter: `project_id=eq.${projectId}` }, upsert)
+      .channel(`issues:${projectId ?? 'all'}:${uuid()}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'issues', ...filter }, upsert)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'issues', ...filter }, upsert)
       // DELETE events cannot be filtered; removing an unknown id is a no-op.
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'issues' }, (p) => {
         const id = (p.old as Partial<Issue>).id
@@ -71,6 +75,7 @@ export function useIssues(projectId: string) {
 
   const add = useCallback(
     (title: string) => {
+      if (!projectId) return
       const now = new Date().toISOString()
       const row: Issue = {
         id: uuid(),
@@ -103,11 +108,14 @@ export function useIssues(projectId: string) {
     enqueue({ table: 'issues', id, kind: 'update', data: patch })
   }, [])
 
-  /** Change status and put the issue on top of its new column. */
+  /** Change status and put the issue on top of its new column, within its own project. */
   const setStatus = useCallback(
-    (id: string, status: Status) =>
-      update(id, { status, position: between(undefined, column(status).find((x) => x.id !== id)?.position) }),
-    [update, column],
+    (id: string, status: Status) => {
+      const project = issues?.find((x) => x.id === id)?.project_id
+      const top = column(status).find((x) => x.id !== id && x.project_id === project)
+      update(id, { status, position: between(undefined, top?.position) })
+    },
+    [update, column, issues],
   )
 
   /** Put a deleted issue back as it was (same id, position and dates). */
@@ -120,7 +128,7 @@ export function useIssues(projectId: string) {
     (issue: Issue) => {
       setIssues((list) => list?.filter((x) => x.id !== issue.id) ?? null)
       enqueue({ table: 'issues', id: issue.id, kind: 'delete' })
-      toast('Issue supprimée', { duration: 10_000, action: { label: 'Annuler', run: () => restore(issue) } })
+      toast('Issue deleted', { duration: 10_000, action: { label: 'Undo', run: () => restore(issue) } })
     },
     [restore],
   )

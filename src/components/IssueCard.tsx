@@ -10,19 +10,24 @@ interface Props {
   onOpen?: () => void
   onStatus?: (s: Status) => void
   overlay?: boolean
+  /** Project name, shown on the cross-project view. */
+  project?: string
+  /** Keyboard selection. */
+  selected?: boolean
 }
 
-export function IssueCard({ issue, onOpen, onStatus, overlay }: Props) {
+export function IssueCard({ issue, onOpen, onStatus, overlay, project, selected }: Props) {
   const done = issue.status === 'done'
   const priority = PRIORITIES.find((p) => p.id === issue.priority)
   return (
     <div
-      className={`flex items-start gap-2.5 rounded-xl px-3 py-3 ring-1 ${
+      data-issue-id={overlay ? undefined : issue.id}
+      className={`flex scroll-my-24 items-start gap-2.5 rounded-xl px-3 py-3 ring-1 ${
         priority?.card ?? 'bg-white ring-neutral-200/80 dark:bg-neutral-900 dark:ring-neutral-800'
-      } ${overlay ? 'rotate-1 shadow-xl' : 'shadow-sm'}`}
+      } ${overlay ? 'rotate-1 shadow-xl' : 'shadow-sm'} ${selected ? 'ring-accent/50!' : ''}`}
     >
       <button
-        aria-label="Changer le statut"
+        aria-label="Change status"
         onClick={(e) => {
           e.stopPropagation()
           onStatus?.(NEXT[issue.status])
@@ -37,6 +42,7 @@ export function IssueCard({ issue, onOpen, onStatus, overlay }: Props) {
           {issue.title}
         </p>
         {issue.body && <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{issue.body}</p>}
+        {project && <p className="mt-1.5 truncate text-xs font-medium text-accent/80">{project}</p>}
       </button>
     </div>
   )

@@ -64,14 +64,14 @@ export function SearchPalette({ issues, onPick, onClose }: Props) {
               setActive(0)
             }}
             onKeyDown={onKeyDown}
-            placeholder="Rechercher une issue…"
+            placeholder="Search issues…"
             enterKeyHint="go"
-            aria-label="Rechercher une issue"
+            aria-label="Search issues"
             className="min-w-0 flex-1 bg-transparent py-3.5 outline-none placeholder:text-neutral-400"
           />
         </div>
         <ul ref={list} className="overflow-y-auto p-1.5">
-          {hits.length === 0 && <li className="py-8 text-center text-sm text-neutral-400">Aucune issue trouvée.</li>}
+          {hits.length === 0 && <li className="py-8 text-center text-sm text-neutral-400">No issue found.</li>}
           {hits.map(({ item, title, body }, i) => {
             const priority = PRIORITIES.find((p) => p.id === item.priority)
             return (

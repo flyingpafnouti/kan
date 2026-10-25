@@ -14,13 +14,13 @@ const preferredType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find
 )
 
 async function askKey() {
-  const key = prompt('Clé API Groq (console.groq.com/keys), enregistrée sur le compte :')?.trim()
+  const key = prompt('Groq API key (console.groq.com/keys), saved to your account:')?.trim()
   if (!key) return false
   try {
     await setGroqKey(key)
     return true
   } catch {
-    toast("Impossible d'enregistrer la clé (hors ligne ?)")
+    toast('Could not save the key (offline?)')
     return false
   }
 }
@@ -78,7 +78,7 @@ export function useDictation(onText: (text: string) => void) {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch {
-      toast('Micro inaccessible')
+      toast('Microphone unavailable')
       return abort()
     }
     // Closed while the permission dialog was up.
@@ -106,8 +106,8 @@ export function useDictation(onText: (text: string) => void) {
       } catch (e) {
         if (e instanceof MissingKeyError) {
           await setGroqKey(null).catch(() => {})
-          toast('Clé Groq refusée, elle sera redemandée')
-        } else toast(navigator.onLine ? 'Transcription échouée' : 'Transcription impossible hors ligne')
+          toast('Groq key rejected, it will be asked again')
+        } else toast(navigator.onLine ? 'Transcription failed' : 'Transcription unavailable offline')
       } finally {
         setState('idle')
       }

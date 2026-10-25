@@ -5,6 +5,7 @@ import { useRoute } from './lib/router'
 import { Login } from './pages/Login'
 import { Projects } from './pages/Projects'
 import { Board } from './pages/Board'
+import { AllIssues } from './pages/AllIssues'
 import { Toaster } from './components/Toaster'
 
 export function App() {
@@ -30,7 +31,7 @@ export function App() {
   if (!configured) {
     return (
       <main className="mx-auto max-w-md p-6 text-sm text-neutral-500">
-        Variables <code>VITE_SUPABASE_URL</code> et <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> manquantes. Voir le
+        Missing <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> variables. See the
         README.
       </main>
     )
@@ -43,6 +44,8 @@ export function App() {
         <Login />
       ) : route.name === 'board' ? (
         <Board key={route.projectId} projectId={route.projectId} />
+      ) : route.name === 'all' ? (
+        <AllIssues />
       ) : (
         <Projects />
       )}

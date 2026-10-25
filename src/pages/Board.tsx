@@ -22,6 +22,7 @@ import { useIssues } from '../hooks/useIssues'
 import { useProject } from '../hooks/useProjects'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useSwipe } from '../hooks/useSwipe'
+import { useIssueKeys } from '../hooks/useIssueKeys'
 import { Column } from '../components/Column'
 import { IssueCard } from '../components/IssueCard'
 import { IssueSheet } from '../components/IssueSheet'
@@ -42,6 +43,8 @@ export function Board({ projectId }: { projectId: string }) {
   const [tab, setTab] = useState<Status>('todo')
   const [openId, setOpenId] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
+  // Issue reached with the sheet's previous / next: shown without the opening animation.
+  const [steppedTo, setSteppedTo] = useState<string | null>(null)
   const [dragStart, setDragStart] = useState<Issue | null>(null)
   const quickAdd = useRef<HTMLInputElement>(null)
   const page = useRef<HTMLElement>(null)
@@ -54,13 +57,13 @@ export function Board({ projectId }: { projectId: string }) {
     } else if (project) rememberProject(projectId)
   }, [project, projectId])
 
-  // Escape goes back to the projects, "/" opens the search, any other printable key starts a new issue title on desktop.
+  // Escape or Backspace goes back to the projects, "/" opens the search, any other printable key starts a new issue title on desktop.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]')
       if (typing || openId || searching || dragStart || e.defaultPrevented || e.isComposing) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' || e.key === 'Backspace') {
         e.preventDefault()
         rememberProject(null)
         navigate({ name: 'projects' })
@@ -148,7 +151,45 @@ export function Board({ projectId }: { projectId: string }) {
     .sort((a, b) => doneSince(b).localeCompare(doneSince(a)))
   const visible = (status: Status) => (status === 'done' ? column('done').filter((x) => !isArchived(x, now)) : column(status))
   const counts = { todo: column('todo').length, doing: column('doing').length, done: visible('done').length }
-  const columnProps = { onOpen: setOpenId, onStatus: setStatus }
+
+  function reorder(id: string, dir: -1 | 1) {
+    const a = find(id)
+    if (!a) return
+    const col = visible(a.status)
+    const i = col.findIndex((x) => x.id === id)
+    const neighbor = col[i + dir]
+    if (!neighbor) return
+    const beyond = col[i + 2 * dir]
+    update(id, {
+      position: dir < 0 ? between(beyond?.position, neighbor.position) : between(neighbor.position, beyond?.position),
+    })
+  }
+
+  const { selected, setSelected, sibling } = useIssueKeys({
+    enabled: !openId && !searching && !dragStart,
+    column: visible,
+    tab: desktop ? undefined : tab,
+    setTab: desktop ? undefined : setTab,
+    onOpen: setOpenId,
+    onStatus: setStatus,
+    onReorder: reorder,
+  })
+  const columnProps = {
+    onOpen: (id: string) => {
+      setSelected(id)
+      setOpenId(id)
+    },
+    onStatus: setStatus,
+    selected,
+  }
+
+  const prev = open && sibling(open.id, -1)
+  const next = open && sibling(open.id, 1)
+  function step(id: string) {
+    setSteppedTo(id)
+    setSelected(id)
+    setOpenId(id)
+  }
 
   return (
     <main
@@ -162,7 +203,7 @@ export function Board({ projectId }: { projectId: string }) {
               rememberProject(null)
               navigate({ name: 'projects' })
             }}
-            aria-label="Projets"
+            aria-label="Projects"
             className="-ml-2 rounded-lg p-1.5 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
           >
             <BackIcon width={22} height={22} />
@@ -174,8 +215,8 @@ export function Board({ projectId }: { projectId: string }) {
               <button
                 // Mounting the field inside the tap lets iOS open the keyboard.
                 onClick={() => flushSync(() => setSearching(true))}
-                aria-label="Rechercher"
-                title="Rechercher (/)"
+                aria-label="Search"
+                title="Search (/)"
                 className="rounded-lg p-1.5 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
               >
                 <SearchIcon />
@@ -184,8 +225,8 @@ export function Board({ projectId }: { projectId: string }) {
             {project && issues && (
               <button
                 onClick={() => downloadMarkdown(project.name, boardToMarkdown(project.name, column))}
-                aria-label="Télécharger en Markdown"
-                title="Télécharger en Markdown"
+                aria-label="Download as Markdown"
+                title="Download as Markdown"
                 className="-mr-1.5 rounded-lg p-1.5 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
               >
                 <DownloadIcon />
@@ -229,7 +270,7 @@ export function Board({ projectId }: { projectId: string }) {
                 status={tab}
                 issues={visible(tab)}
                 archived={tab === 'done' ? archived : undefined}
-                empty={tab === 'todo' ? 'Rien à faire. Touche + pour noter une idée.' : 'Vide.'}
+                empty={tab === 'todo' ? 'Nothing to do. Tap + to jot down an idea.' : 'Empty.'}
                 {...columnProps}
               />
             </div>
@@ -265,6 +306,9 @@ export function Board({ projectId }: { projectId: string }) {
             setOpenId(null)
           }}
           onClose={() => setOpenId(null)}
+          onPrev={prev && (() => step(prev.id))}
+          onNext={next && (() => step(next.id))}
+          instant={open.id === steppedTo}
         />
       )}
     </main>

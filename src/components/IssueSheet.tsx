@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PRIORITIES, STATUSES, type Issue, type Priority, type Status } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { StatusIcon } from './StatusIcon'
-import { MicIcon, StopIcon } from './icons'
+import { ChevronIcon, MicIcon, StopIcon } from './icons'
 
 interface Props {
   issue: Issue
@@ -11,15 +11,20 @@ interface Props {
   onPriority: (p: Priority | null) => void
   onDelete: () => void
   onClose: () => void
+  /** Previous / next issue of the same column (Alt + ↑ / ↓), absent at the ends. Alt + ← / → calls onStatus. */
+  onPrev?: () => void
+  onNext?: () => void
+  /** Reached from a neighbour: no opening animation. */
+  instant?: boolean
 }
 
 const SAVE_DELAY = 600
 
-const DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
-const TIME = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' })
-const formatDate = (iso: string) => `${DAY.format(new Date(iso))} à ${TIME.format(new Date(iso))}`
+const DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+const TIME = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
+const formatDate = (iso: string) => `${DAY.format(new Date(iso))} at ${TIME.format(new Date(iso))}`
 
-export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onClose }: Props) {
+export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onClose, onPrev, onNext, instant }: Props) {
   const [title, setTitle] = useState(issue.title)
   const [body, setBody] = useState(issue.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -45,6 +50,11 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
     flush()
     onClose()
   }
+  const step = (go?: () => void) => {
+    if (!go) return
+    flush()
+    go()
+  }
 
   // The transcript is appended to the notes; a result landing after close is still saved by the pending timer.
   const dictation = useDictation((text) => {
@@ -55,6 +65,18 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Alt + ↑ / ↓ has no use in a text field on Linux and Windows, so it works with the cursor in the notes.
+      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.isComposing) {
+        e.preventDefault()
+        return step(e.key === 'ArrowUp' ? onPrev : onNext)
+      }
+      // Alt + ← / → moves the issue to the neighbouring column, like on the board.
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.isComposing) {
+        e.preventDefault()
+        const target = STATUSES[STATUSES.findIndex((s) => s.id === issue.status) + (e.key === 'ArrowLeft' ? -1 : 1)]
+        if (target) onStatus(target.id)
+        return
+      }
       if (e.key !== 'Escape') return
       // Keeps the board from also handling this Escape as "back to projects".
       e.preventDefault()
@@ -66,20 +88,48 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center md:p-6">
-      <div className="animate-fade absolute inset-0 bg-black/40" onClick={close} />
-      <div className="animate-sheet relative flex max-h-[85dvh] w-full max-w-lg flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900">
+      <div className={`absolute inset-0 bg-black/40 ${instant ? '' : 'animate-fade'}`} onClick={close} />
+      <div
+        className={`relative ${instant ? '' : 'animate-sheet'} flex max-h-[85dvh] w-full max-w-lg flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900`}
+      >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300 md:hidden dark:bg-neutral-700" />
         <div className="flex-1 overflow-y-auto px-5 pt-4">
-          <AutoTextarea
-            value={title}
-            onChange={(v) => {
-              const t = v.replace(/\n/g, ' ')
-              setTitle(t)
-              schedule(t, body)
-            }}
-            className="text-lg font-semibold"
-            placeholder="Titre"
-          />
+          <div className="flex items-start gap-1">
+            <div className="min-w-0 flex-1">
+              <AutoTextarea
+                value={title}
+                onChange={(v) => {
+                  const t = v.replace(/\n/g, ' ')
+                  setTitle(t)
+                  schedule(t, body)
+                }}
+                className="text-lg font-semibold"
+                placeholder="Title"
+              />
+            </div>
+            {(onPrev || onNext) && (
+              <div className="-mr-2 flex shrink-0">
+                <button
+                  onClick={() => step(onPrev)}
+                  disabled={!onPrev}
+                  aria-label="Previous issue"
+                  title="Previous issue (Alt ↑)"
+                  className="rounded-lg p-1 text-neutral-400 hover:text-neutral-700 disabled:opacity-30 dark:hover:text-neutral-200"
+                >
+                  <ChevronIcon width={18} height={18} className="-rotate-90" />
+                </button>
+                <button
+                  onClick={() => step(onNext)}
+                  disabled={!onNext}
+                  aria-label="Next issue"
+                  title="Next issue (Alt ↓)"
+                  className="rounded-lg p-1 text-neutral-400 hover:text-neutral-700 disabled:opacity-30 dark:hover:text-neutral-200"
+                >
+                  <ChevronIcon width={18} height={18} className="rotate-90" />
+                </button>
+              </div>
+            )}
+          </div>
           <AutoTextarea
             value={body}
             onChange={(v) => {
@@ -89,15 +139,15 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
             className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"
             placeholder={
               dictation.state === 'recording'
-                ? 'Parlez…'
+                ? 'Speak…'
                 : dictation.state === 'transcribing'
-                  ? 'Transcription…'
+                  ? 'Transcribing…'
                   : 'Notes…'
             }
           />
           <div className="flex items-center justify-between gap-2 py-2">
             <p className="text-xs text-neutral-400">
-              {dictation.state === 'transcribing' ? 'Transcription…' : `Modifié le ${formatDate(issue.updated_at)}`}
+              {dictation.state === 'transcribing' ? 'Transcribing…' : `Edited ${formatDate(issue.updated_at)}`}
             </p>
             {dictationSupported && (
               <div className="flex items-center gap-2">
@@ -107,8 +157,8 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
                   </div>
                 )}
                 <button
-                  aria-label={dictation.state === 'recording' ? 'Arrêter la dictée' : 'Dicter les notes'}
-                  title={dictation.state === 'recording' ? 'Arrêter la dictée' : 'Dicter les notes'}
+                  aria-label={dictation.state === 'recording' ? 'Stop dictation' : 'Dictate notes'}
+                  title={dictation.state === 'recording' ? 'Stop dictation' : 'Dictate notes'}
                   onClick={dictation.toggle}
                   disabled={dictation.state === 'starting' || dictation.state === 'transcribing'}
                   className={`-mr-1 rounded-full p-1.5 transition ${
@@ -164,10 +214,10 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
               onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
               className="rounded-lg py-1 text-sm text-red-500"
             >
-              {confirmDelete ? 'Confirmer la suppression' : 'Supprimer'}
+              {confirmDelete ? 'Confirm deletion' : 'Delete'}
             </button>
             <button onClick={close} className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900">
-              Fermer
+              Close
             </button>
           </div>
         </div>

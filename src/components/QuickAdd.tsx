@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useKeyboardInset } from '../hooks/useKeyboardInset'
 import { PlusIcon, SendIcon } from './icons'
 
-/** Desktop: inline field on top of the "À faire" column, focused by typing anywhere on the board. */
+/** Desktop: inline field on top of the "To do" column, focused by typing anywhere on the board. */
 export const QuickAddInline = forwardRef<HTMLInputElement, { onAdd: (title: string) => void }>(function QuickAddInline(
   { onAdd },
   ref,
@@ -21,7 +21,7 @@ export const QuickAddInline = forwardRef<HTMLInputElement, { onAdd: (title: stri
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
-        placeholder="Nouvelle issue…"
+        placeholder="New issue…"
         className="w-full rounded-xl border border-dashed border-neutral-300 bg-transparent px-3 py-2.5 text-[15px] outline-none focus:border-solid focus:border-accent dark:border-neutral-700"
       />
     </form>
@@ -53,7 +53,7 @@ export function QuickAddMobile({ onAdd }: { onAdd: (title: string) => void }) {
   return (
     <>
       <button
-        aria-label="Nouvelle issue"
+        aria-label="New issue"
         onClick={() => {
           setOpen(true)
           input.current?.focus()
@@ -85,13 +85,13 @@ export function QuickAddMobile({ onAdd }: { onAdd: (title: string) => void }) {
                 if (document.activeElement !== input.current && !input.current?.value.trim()) setOpen(false)
               })
             }
-            placeholder="Nouvelle issue"
+            placeholder="New issue"
             enterKeyHint="send"
             tabIndex={open ? 0 : -1}
             className="min-w-0 flex-1 rounded-full bg-white px-4 py-2.5 outline-none ring-1 ring-neutral-200 focus:ring-accent dark:bg-neutral-900 dark:ring-neutral-800"
           />
           <button
-            aria-label="Ajouter"
+            aria-label="Add"
             onMouseDown={(e) => e.preventDefault()}
             disabled={!value.trim()}
             className="rounded-full bg-accent p-2.5 text-white transition disabled:opacity-30"

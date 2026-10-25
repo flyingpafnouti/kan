@@ -13,7 +13,7 @@ export function Login() {
     setError(null)
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
     setBusy(false)
-    if (error) setError('Email ou mot de passe incorrect')
+    if (error) setError('Wrong email or password')
   }
 
   const field =
@@ -37,7 +37,7 @@ export function Login() {
           className={field}
           type="password"
           autoComplete="current-password"
-          placeholder="Mot de passe"
+          placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -47,7 +47,7 @@ export function Login() {
           disabled={busy}
           className="w-full rounded-xl bg-accent py-3 font-medium text-white transition hover:bg-accent-strong disabled:opacity-60"
         >
-          Se connecter
+          Sign in
         </button>
       </form>
     </main>

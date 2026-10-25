@@ -132,7 +132,7 @@ export async function flush() {
     ops = ops.filter((o) => o !== op)
     save()
     if (error) {
-      toast('Une modification a été refusée par le serveur')
+      toast('A change was rejected by the server')
       rejectListeners.forEach((l) => l())
     }
   }
