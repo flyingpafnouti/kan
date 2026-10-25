@@ -26,6 +26,7 @@ import { IssueSheet } from '../components/IssueSheet'
 import { StatusTabs } from '../components/StatusTabs'
 import { QuickAddInline, QuickAddMobile } from '../components/QuickAdd'
 import { BackIcon } from '../components/icons'
+import { SyncBadge } from '../components/SyncBadge'
 
 const isStatus = (id: UniqueIdentifier): id is Status => STATUSES.some((s) => s.id === id)
 
@@ -130,6 +131,9 @@ export function Board({ projectId }: { projectId: string }) {
             <BackIcon width={22} height={22} />
           </button>
           <h1 className="truncate text-xl font-semibold tracking-tight">{project?.name ?? ''}</h1>
+          <div className="ml-auto">
+            <SyncBadge />
+          </div>
         </div>
         {!desktop && (
           <div className="pb-3">
@@ -182,6 +186,7 @@ export function Board({ projectId }: { projectId: string }) {
           issue={open}
           onSave={(patch) => update(open.id, patch)}
           onStatus={(s) => setStatus(open.id, s)}
+          onPriority={(priority) => update(open.id, { priority })}
           onDelete={() => {
             remove(open)
             setOpenId(null)

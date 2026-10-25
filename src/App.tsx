@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { configured, supabase } from './lib/supabase'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
+import { configured, hasStoredSession, supabase } from './lib/supabase'
 import { useRoute } from './lib/router'
 import { Login } from './pages/Login'
 import { Projects } from './pages/Projects'
@@ -8,12 +8,22 @@ import { Board } from './pages/Board'
 import { Toaster } from './components/Toaster'
 
 export function App() {
-  const [session, setSession] = useState<Session | null | undefined>(undefined)
+  // A stored session renders the app at once: getSession can take ~30 s offline while it retries the refresh.
+  const [signedIn, setSignedIn] = useState<boolean | undefined>(() => (hasStoredSession() ? true : undefined))
   const route = useRoute()
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    // Offline with an expired access token, getSession fails to refresh and reports no session,
+    // although the stored refresh token is still valid: stay signed in and refresh once back online.
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) =>
+        setSignedIn(Boolean(data.session) || (isAuthRetryableFetchError(error) && hasStoredSession())),
+      )
+    const { data } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'SIGNED_OUT') setSignedIn(false)
+      else if (s) setSignedIn(true)
+    })
     return () => data.subscription.unsubscribe()
   }, [])
 
@@ -25,11 +35,11 @@ export function App() {
       </main>
     )
   }
-  if (session === undefined) return null
+  if (signedIn === undefined) return null
 
   return (
     <>
-      {!session ? (
+      {!signedIn ? (
         <Login />
       ) : route.name === 'board' ? (
         <Board key={route.projectId} projectId={route.projectId} />

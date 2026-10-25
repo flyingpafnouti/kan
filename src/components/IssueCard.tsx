@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { Issue, Status } from '../lib/types'
+import { PRIORITIES, type Issue, type Status } from '../lib/types'
 import { StatusIcon } from './StatusIcon'
 
 const NEXT: Record<Status, Status> = { todo: 'doing', doing: 'done', done: 'todo' }
@@ -14,11 +14,12 @@ interface Props {
 
 export function IssueCard({ issue, onOpen, onStatus, overlay }: Props) {
   const done = issue.status === 'done'
+  const priority = PRIORITIES.find((p) => p.id === issue.priority)
   return (
     <div
-      className={`flex items-start gap-2.5 rounded-xl bg-white px-3 py-3 ring-1 ring-neutral-200/80 dark:bg-neutral-900 dark:ring-neutral-800 ${
-        overlay ? 'rotate-1 shadow-xl' : 'shadow-sm'
-      }`}
+      className={`flex items-start gap-2.5 rounded-xl px-3 py-3 ring-1 ${
+        priority?.card ?? 'bg-white ring-neutral-200/80 dark:bg-neutral-900 dark:ring-neutral-800'
+      } ${overlay ? 'rotate-1 shadow-xl' : 'shadow-sm'}`}
     >
       <button
         aria-label="Changer le statut"

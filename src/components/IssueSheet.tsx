@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { STATUSES, type Issue, type Status } from '../lib/types'
+import { PRIORITIES, STATUSES, type Issue, type Priority, type Status } from '../lib/types'
 import { StatusIcon } from './StatusIcon'
 
 interface Props {
   issue: Issue
   onSave: (patch: { title?: string; body?: string }) => void
   onStatus: (s: Status) => void
+  onPriority: (p: Priority | null) => void
   onDelete: () => void
   onClose: () => void
 }
@@ -16,7 +17,7 @@ const DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', y
 const TIME = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' })
 const formatDate = (iso: string) => `${DAY.format(new Date(iso))} à ${TIME.format(new Date(iso))}`
 
-export function IssueSheet({ issue, onSave, onStatus, onDelete, onClose }: Props) {
+export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onClose }: Props) {
   const [title, setTitle] = useState(issue.title)
   const [body, setBody] = useState(issue.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -77,6 +78,21 @@ export function IssueSheet({ issue, onSave, onStatus, onDelete, onClose }: Props
           <p className="pt-3 pb-3 text-xs text-neutral-400">Modifié le {formatDate(issue.updated_at)}</p>
         </div>
         <div className="space-y-3 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
+          <div className="grid grid-cols-4 gap-2">
+            {PRIORITIES.map((p) => (
+              <button
+                key={p.id}
+                aria-pressed={issue.priority === p.id}
+                // Tapping the active priority clears it.
+                onClick={() => onPriority(issue.priority === p.id ? null : p.id)}
+                className={`rounded-xl py-1.5 text-sm font-medium ring-1 transition ${
+                  issue.priority === p.id ? p.chip : 'text-neutral-500 ring-neutral-200 dark:ring-neutral-800'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <div className="grid grid-cols-3 gap-2">
             {STATUSES.map(({ id, label }) => (
               <button

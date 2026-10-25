@@ -15,6 +15,7 @@ create table public.issues (
   title      text not null check (char_length(title) between 1 and 500),
   body       text not null default '',
   status     text not null default 'todo' check (status in ('todo', 'doing', 'done')),
+  priority   smallint check (priority between 0 and 3),
   position   float8 not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

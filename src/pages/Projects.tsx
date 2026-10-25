@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
-import { navigate } from '../lib/router'
+import { navigate, rememberProject } from '../lib/router'
+import { clear as clearOutbox, pendingCount } from '../lib/outbox'
+import { clearCache } from '../lib/cache'
+import { SyncBadge } from '../components/SyncBadge'
 import { useProjects, type ProjectRow } from '../hooks/useProjects'
 import { ChevronIcon, MoreIcon, PlusIcon } from '../components/icons'
 
@@ -8,6 +11,15 @@ export function Projects() {
   const { projects, create, rename, remove } = useProjects()
   const [name, setName] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
+
+  async function signOut() {
+    const n = pendingCount()
+    if (n && !confirm(`${n} modification(s) pas encore synchronisée(s) seront perdues. Se déconnecter ?`)) return
+    await supabase.auth.signOut()
+    clearOutbox()
+    clearCache()
+    rememberProject(null)
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -21,8 +33,11 @@ export function Projects() {
     <main className="mx-auto min-h-dvh max-w-xl px-4 pt-safe pb-safe">
       <header className="flex items-center justify-between py-5">
         <h1 className="text-2xl font-semibold tracking-tight">Projets</h1>
+        <div className="ml-auto mr-2">
+          <SyncBadge />
+        </div>
         <button
-          onClick={() => supabase.auth.signOut()}
+          onClick={signOut}
           className="rounded-lg px-2 py-1 text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
         >
           Déconnexion
