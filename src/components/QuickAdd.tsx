@@ -78,7 +78,13 @@ export function QuickAddMobile({ onAdd }: { onAdd: (title: string) => void }) {
             ref={input}
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            onBlur={() => !value.trim() && setOpen(false)}
+            // Android's keyboard picker (long press on Gboard) takes window focus but the field stays the active
+            // element: only close when focus really went elsewhere, or the picker and the keyboard vanish.
+            onBlur={() =>
+              setTimeout(() => {
+                if (document.activeElement !== input.current && !input.current?.value.trim()) setOpen(false)
+              })
+            }
             placeholder="Nouvelle issue"
             enterKeyHint="send"
             tabIndex={open ? 0 : -1}
