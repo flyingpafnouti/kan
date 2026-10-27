@@ -18,15 +18,27 @@ export interface ProjectRow extends Project {
 /** Rows cached before counts or sharing existed lack these fields. */
 const withDefaults = (p: Project & Partial<ProjectRow>): ProjectRow => ({ ...p, open: p.open ?? 0, members: p.members ?? 1 })
 
-/** Open issues known locally, when this device has the project's issues cached. */
-function localOpenCount(projectId: string): number | undefined {
+/** Open issues and last issue change known locally, when this device has the project's issues cached. */
+function localState(projectId: string) {
   const issues = readCache<Issue[]>(`issues:${projectId}`)
-  return issues?.filter((x) => x.status !== 'done').length
+  if (!issues) return null
+  const open = issues.filter((x) => x.status !== 'done').length
+  const updated = issues.reduce<string | undefined>((m, x) => (!m || x.updated_at > m ? x.updated_at : m), undefined)
+  return { open, updated }
 }
 
 function withLocalCounts(rows: ProjectRow[]): ProjectRow[] {
-  return rows.map((p) => ({ ...p, open: localOpenCount(p.id) ?? p.open }))
+  return rows.map((p) => {
+    const local = localState(p.id)
+    if (!local) return p
+    const updated_at = local.updated && (!p.updated_at || local.updated > p.updated_at) ? local.updated : p.updated_at
+    return { ...p, open: local.open, updated_at }
+  })
 }
+
+/** Most recently changed first; rows cached before updated_at existed fall back on their creation. */
+export const byLastChange = (a: Project, b: Project) =>
+  (b.updated_at ?? b.created_at).localeCompare(a.updated_at ?? a.created_at)
 
 export function useProjects() {
   const [projects, setProjects] = useState<ProjectRow[] | null>(() => {
@@ -39,7 +51,7 @@ export function useProjects() {
     if (!(await hasSession())) return setProjects((ps) => ps ?? [])
     const { data, error } = await supabase
       .from('projects')
-      .select('id, name, position, created_at, invite_token, issues(count), project_members(count)')
+      .select('id, name, position, created_at, updated_at, invite_token, issues(count), project_members(count)')
       .neq('issues.status', 'done')
       .order('position')
     if (error) return setProjects((ps) => ps ?? [])
@@ -93,7 +105,9 @@ export function useProjects() {
   )
 
   const rename = useCallback((id: string, name: string) => {
-    setProjects((ps) => ps?.map((p) => (p.id === id ? { ...p, name } : p)) ?? null)
+    // The server bumps updated_at on rename; mirror it so the list reorders at once.
+    const updated_at = new Date().toISOString()
+    setProjects((ps) => ps?.map((p) => (p.id === id ? { ...p, name, updated_at } : p)) ?? null)
     enqueue({ table: 'projects', id, kind: 'update', data: { name } })
   }, [])
 

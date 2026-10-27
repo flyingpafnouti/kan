@@ -1,15 +1,17 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { navigate } from '../lib/router'
 import { toast } from '../lib/toast'
 import { search } from '../lib/fuzzy'
 import { HomeHeader } from '../components/HomeHeader'
 import { ShortcutsHelp } from '../components/ShortcutsHelp'
 import { useMediaQuery } from '../hooks/useMediaQuery'
-import { useProjects, type ProjectRow } from '../hooks/useProjects'
+import { byLastChange, useProjects, type ProjectRow } from '../hooks/useProjects'
 import { ChevronIcon, MoreIcon, PlusIcon } from '../components/icons'
 
 export function Projects() {
-  const { projects, create, rename, remove, leave, inviteLink } = useProjects()
+  const { projects: stored, create, rename, remove, leave, inviteLink } = useProjects()
+  // Listed by last change; other pages keep the creation order of useProjects.
+  const projects = useMemo(() => stored && [...stored].sort(byLastChange), [stored])
   const [name, setName] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   // Keyboard selection: 'all' or a project id.
