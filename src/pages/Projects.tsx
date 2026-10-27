@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { navigate } from '../lib/router'
+import { search } from '../lib/fuzzy'
 import { HomeHeader } from '../components/HomeHeader'
 import { ShortcutsHelp } from '../components/ShortcutsHelp'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -14,6 +15,20 @@ export function Projects() {
   const [selected, setSelected] = useState<string | null>(null)
   // Shortcuts only matter with a keyboard and a mouse.
   const desktop = useMediaQuery('(pointer: fine)')
+  // Type-ahead: letters typed in a row select the best matching project, then fade out.
+  const [typed, setTyped] = useState('')
+  const typedTimer = useRef<number>(undefined)
+
+  function typeAhead(s: string) {
+    clearTimeout(typedTimer.current)
+    setTyped(s)
+    if (!s) return
+    typedTimer.current = window.setTimeout(() => setTyped(''), 2000)
+    const hit = search(projects!.map((p) => ({ id: p.id, title: p.name, body: '' })), s)[0]
+    if (hit) setSelected(hit.item.id)
+  }
+
+  useEffect(() => () => clearTimeout(typedTimer.current), [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -28,13 +43,20 @@ export function Projects() {
       } else if (e.key === 'Enter' && i >= 0) {
         e.preventDefault()
         navigate(selected === 'all' ? { name: 'all' } : { name: 'board', projectId: selected! })
-      } else if (e.key === 'Escape' && i >= 0) {
+      } else if (e.key === 'Escape' && (i >= 0 || typed)) {
         setSelected(null)
+        typeAhead('')
+      } else if (e.key === 'Backspace' && typed) {
+        e.preventDefault()
+        typeAhead(typed.slice(0, -1))
+      } else if ((e.key.length === 1 && /[\p{L}\p{N}]/u.test(e.key)) || (e.key === ' ' && typed)) {
+        e.preventDefault()
+        typeAhead(typed + e.key)
       }
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
-  }, [projects, selected])
+  }, [projects, selected, typed])
 
   useEffect(() => {
     if (selected) document.querySelector(`[data-nav-id="${selected}"]`)?.scrollIntoView({ block: 'nearest' })
@@ -134,6 +156,14 @@ export function Projects() {
             <PlusIcon />
           </button>
         </form>
+      )}
+
+      {typed && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-8 flex justify-center pb-safe">
+          <span className="rounded-full bg-neutral-900/80 px-3 py-1 text-sm text-white shadow dark:bg-neutral-100/90 dark:text-neutral-900">
+            {typed}
+          </span>
+        </div>
       )}
 
       {desktop && projects && <ShortcutsHelp />}

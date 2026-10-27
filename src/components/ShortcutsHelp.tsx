@@ -6,6 +6,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
     keys: [
       ['← →', 'Projects / Notes'],
       ['↑ ↓', 'Select a project'],
+      ['Letters', 'Jump to a project by name'],
       ['Enter', 'Open'],
     ],
   },
