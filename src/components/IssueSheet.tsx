@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { PRIORITIES, STATUSES, type Issue, type Priority, type Status } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
+import { formatDate } from '../lib/date'
 import { StatusIcon } from './StatusIcon'
-import { ChevronIcon, MicIcon, StopIcon } from './icons'
+import { AutoTextarea } from './AutoTextarea'
+import { DictationButton } from './DictationButton'
+import { ChevronIcon } from './icons'
 
 interface Props {
   issue: Issue
@@ -19,10 +22,6 @@ interface Props {
 }
 
 const SAVE_DELAY = 600
-
-const DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-const TIME = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
-const formatDate = (iso: string) => `${DAY.format(new Date(iso))} at ${TIME.format(new Date(iso))}`
 
 export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onClose, onPrev, onNext, instant }: Props) {
   const [title, setTitle] = useState(issue.title)
@@ -149,32 +148,7 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
             <p className="text-xs text-neutral-400">
               {dictation.state === 'transcribing' ? 'Transcribing…' : `Edited ${formatDate(issue.updated_at)}`}
             </p>
-            {dictationSupported && (
-              <div className="flex items-center gap-2">
-                {dictation.state === 'recording' && (
-                  <div className="h-1 w-16 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
-                    <div ref={dictation.meter} className="h-full origin-left scale-x-0 rounded-full bg-red-500/70" />
-                  </div>
-                )}
-                <button
-                  aria-label={dictation.state === 'recording' ? 'Stop dictation' : 'Dictate notes'}
-                  title={dictation.state === 'recording' ? 'Stop dictation' : 'Dictate notes'}
-                  onClick={dictation.toggle}
-                  disabled={dictation.state === 'starting' || dictation.state === 'transcribing'}
-                  className={`-mr-1 rounded-full p-1.5 transition ${
-                    dictation.state === 'recording'
-                      ? 'animate-pulse text-red-500'
-                      : 'text-neutral-300 hover:text-neutral-500 disabled:opacity-40 dark:text-neutral-600 dark:hover:text-neutral-400'
-                  }`}
-                >
-                  {dictation.state === 'recording' ? (
-                    <StopIcon width={16} height={16} />
-                  ) : (
-                    <MicIcon width={16} height={16} />
-                  )}
-                </button>
-              </div>
-            )}
+            {dictationSupported && <DictationButton dictation={dictation} label="Dictate notes" />}
           </div>
         </div>
         <div className="space-y-3 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
@@ -223,35 +197,5 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
         </div>
       </div>
     </div>
-  )
-}
-
-function AutoTextarea({
-  value,
-  onChange,
-  className,
-  placeholder,
-}: {
-  value: string
-  onChange: (v: string) => void
-  className: string
-  placeholder: string
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
-  }, [value])
-  return (
-    <textarea
-      ref={ref}
-      rows={1}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className={`block w-full resize-none bg-transparent outline-none placeholder:text-neutral-400 ${className}`}
-    />
   )
 }

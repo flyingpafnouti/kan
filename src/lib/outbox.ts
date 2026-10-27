@@ -7,7 +7,7 @@ import { toast } from './toast'
  * reached the server but whose response was lost can safely be replayed.
  */
 
-export type Table = 'projects' | 'issues'
+export type Table = 'projects' | 'issues' | 'notes'
 type Row = Record<string, unknown>
 
 export interface Op {

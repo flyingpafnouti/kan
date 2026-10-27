@@ -43,7 +43,7 @@
     overscroll-behavior-y: none;
   }
   /* 16px minimum prevents iOS from zooming on focus. */
-  input, textarea {
+  input, textarea, select {
     font-size: max(16px, 1em);
   }
   :focus-visible {

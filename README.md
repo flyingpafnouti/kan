@@ -4,7 +4,7 @@ Suivi d'issues minimaliste en Kanban (To do / In progress / Done), synchronisé 
 
 ## Mise en place Supabase
 
-1. Projet utilisé : celui de cine (`gnayyrrvlpgkdfifauuw`). Les tables `projects` et `issues` cohabitent avec `film_marks`.
+1. Projet utilisé : celui de cine (`gnayyrrvlpgkdfifauuw`). Les tables `projects`, `issues` et `notes` cohabitent avec `film_marks`.
 2. SQL Editor : coller et exécuter `supabase/schema.sql`. Sur une base existante, exécuter à la place les fichiers de `supabase/migrations/` pas encore appliqués, dans l'ordre.
 3. Compte : le même que pour cine.
 4. Les inscriptions restent ouvertes car le projet est partagé avec cine. Un inconnu peut donc créer un compte, mais la RLS ne lui laisse voir que ses propres données.
@@ -42,6 +42,7 @@ L'application s'ouvre alors en plein écran sur le dernier projet consulté.
 - Clavier : les flèches choisissent un projet ou une issue, Entrée l'ouvre. Sur le tableau, Alt + ↑ / ↓ déplace l'issue choisie dans sa colonne et Alt + ← / → change son statut. Dans la fiche, Alt + ↑ / ↓ (ou les chevrons à côté du titre) passe à l'issue précédente ou suivante de la colonne, même avec le curseur dans le texte, et Alt + ← / → change son statut. Alt + ← / → ne fait jamais revenir en arrière dans le navigateur. Le récapitulatif s'ouvre avec `?` ou le lien « Keyboard shortcuts » en bas de la page des projets.
 - Téléphone et tablette : une colonne à la fois, glisser le doigt à gauche ou à droite pour changer. Bouton `+`, Entrée enregistre et laisse le champ ouvert pour la suivante. Appui long pour réordonner. Loupe en haut pour la recherche.
 - Dictée : dans la fiche, le micro sous les notes enregistre, un second appui arrête et ajoute la transcription aux notes (Groq, Whisper Large V3, en français). La clé API Groq est demandée au premier usage et enregistrée dans les métadonnées du compte Supabase, donc partagée entre appareils. Une clé refusée est effacée et redemandée. Nécessite HTTPS : absent avec le serveur de dev ouvert sur le réseau local.
+- Notes : l'onglet « Notes », à côté de « Projects » (ou ← / → au clavier), garde les idées pas encore formulées en issue, la plus récente en haut. Sur téléphone, le gros micro en bas enregistre, un second appui arrête et la transcription devient une nouvelle carte. Sur PC, taper au clavier n'importe où commence une note, Entrée l'enregistre, Maj + Entrée va à la ligne. Dans la fiche d'une note, « To issue… » la transforme en issue en haut du To do du projet choisi : la première ligne, ou la première phrase, devient le titre, le reste les notes de l'issue. Une note vidée est supprimée à la fermeture.
 - « All issues », en haut de la liste des projets, réunit les issues de tous les projets, triées par priorité puis par projet, avec le nom du projet sur chaque carte. On y change le statut et on ouvre les fiches, mais on n'y crée ni ne réordonne d'issue.
 - Thème : suit le réglage clair / sombre du système jusqu'au premier appui sur le soleil / la lune en haut de la page des projets. Le choix est ensuite gardé sur l'appareil.
 - La recherche est approchée (lettres dans l'ordre, sans tenir compte des accents) et porte sur les titres et les notes des issues To do et In progress.

@@ -6,6 +6,7 @@ import { Login } from './pages/Login'
 import { Projects } from './pages/Projects'
 import { Board } from './pages/Board'
 import { AllIssues } from './pages/AllIssues'
+import { Notes } from './pages/Notes'
 import { Toaster } from './components/Toaster'
 
 export function App() {
@@ -46,6 +47,8 @@ export function App() {
         <Board key={route.projectId} projectId={route.projectId} />
       ) : route.name === 'all' ? (
         <AllIssues />
+      ) : route.name === 'notes' ? (
+        <Notes />
       ) : (
         <Projects />
       )}

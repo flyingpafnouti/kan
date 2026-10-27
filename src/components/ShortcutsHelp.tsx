@@ -4,8 +4,18 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
   {
     title: 'Projects',
     keys: [
+      ['← →', 'Projects / Notes'],
       ['↑ ↓', 'Select a project'],
       ['Enter', 'Open'],
+    ],
+  },
+  {
+    title: 'Notes',
+    keys: [
+      ['↑ ↓', 'Select a note'],
+      ['Enter', 'Open the note'],
+      ['Letter', 'New note'],
+      ['Esc', 'Close'],
     ],
   },
   {
@@ -30,7 +40,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
   },
 ]
 
-/** Discreet keyboard cheat sheet for the projects page, toggled by its link or "?". */
+/** Discreet keyboard cheat sheet for the home pages, toggled by its link or "?". */
 export function ShortcutsHelp() {
   const [open, setOpen] = useState(false)
 
@@ -49,7 +59,7 @@ export function ShortcutsHelp() {
         Keyboard shortcuts <kbd className="ml-1 font-sans">?</kbd>
       </button>
       {open && (
-        <div className="mt-3 grid gap-4 sm:grid-cols-3">
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
           {SECTIONS.map(({ title, keys }) => (
             <dl key={title}>
               <dt className="mb-1.5 font-medium text-neutral-500">{title}</dt>

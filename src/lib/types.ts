@@ -60,6 +60,14 @@ export interface Issue {
   done_at?: string | null
 }
 
+/** Loose idea, not tied to a project; can become an issue. */
+export interface Note {
+  id: string
+  body: string
+  created_at: string
+  updated_at: string
+}
+
 /** Done issues leave the "Done" column for its archive drawer after this long. */
 const ARCHIVE_AFTER_MS = 7 * 24 * 3600 * 1000
 

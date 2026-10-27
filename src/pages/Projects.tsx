@@ -1,18 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { supabase } from '../lib/supabase'
-import { navigate, rememberProject } from '../lib/router'
-import { clear as clearOutbox, pendingCount } from '../lib/outbox'
-import { clearCache } from '../lib/cache'
-import { SyncBadge } from '../components/SyncBadge'
+import { navigate } from '../lib/router'
+import { HomeHeader } from '../components/HomeHeader'
 import { ShortcutsHelp } from '../components/ShortcutsHelp'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useProjects, type ProjectRow } from '../hooks/useProjects'
-import { ChevronIcon, MoonIcon, MoreIcon, PlusIcon, SunIcon } from '../components/icons'
-import { toggleTheme, useTheme } from '../lib/theme'
+import { ChevronIcon, MoreIcon, PlusIcon } from '../components/icons'
 
 export function Projects() {
   const { projects, create, rename, remove } = useProjects()
-  const theme = useTheme()
   const [name, setName] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   // Keyboard selection: 'all' or a project id.
@@ -45,15 +40,6 @@ export function Projects() {
     if (selected) document.querySelector(`[data-nav-id="${selected}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
-  async function signOut() {
-    const n = pendingCount()
-    if (n && !confirm(`${n} unsynced change(s) will be lost. Sign out?`)) return
-    await supabase.auth.signOut()
-    clearOutbox()
-    clearCache()
-    rememberProject(null)
-  }
-
   function submit(e: FormEvent) {
     e.preventDefault()
     const n = name.trim()
@@ -64,26 +50,7 @@ export function Projects() {
 
   return (
     <main className="mx-auto min-h-dvh max-w-xl px-4 pt-safe pb-safe">
-      <header className="flex items-center justify-between py-5">
-        <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-        <div className="ml-auto mr-2">
-          <SyncBadge />
-        </div>
-        <button
-          onClick={toggleTheme}
-          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-          className="mr-1 rounded-lg p-1.5 text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
-        >
-          {theme === 'dark' ? <SunIcon width={18} height={18} /> : <MoonIcon width={18} height={18} />}
-        </button>
-        <button
-          onClick={signOut}
-          className="rounded-lg px-2 py-1 text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
-        >
-          Sign out
-        </button>
-      </header>
+      <HomeHeader current="projects" />
 
       {projects && projects.length > 0 && (
         <button
