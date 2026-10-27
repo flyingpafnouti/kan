@@ -5,11 +5,18 @@ import { between } from '../lib/position'
 import { uuid } from '../lib/id'
 import { readCache, removeCache, writeCache } from '../lib/cache'
 import { discard, enqueue, onReject, overlay, pendingCount } from '../lib/outbox'
+import { toast } from '../lib/toast'
+import { href } from '../lib/router'
 import { useRefetchOnFocus } from './useRefetchOnFocus'
 
 export interface ProjectRow extends Project {
   open: number
+  /** More than one means the project is shared. */
+  members: number
 }
+
+/** Rows cached before counts or sharing existed lack these fields. */
+const withDefaults = (p: Project & Partial<ProjectRow>): ProjectRow => ({ ...p, open: p.open ?? 0, members: p.members ?? 1 })
 
 /** Open issues known locally, when this device has the project's issues cached. */
 function localOpenCount(projectId: string): number | undefined {
@@ -24,7 +31,7 @@ function withLocalCounts(rows: ProjectRow[]): ProjectRow[] {
 export function useProjects() {
   const [projects, setProjects] = useState<ProjectRow[] | null>(() => {
     const cached = readCache<ProjectRow[]>('projects')
-    return cached && withLocalCounts(overlay('projects', cached).map((p) => ({ ...p, open: p.open ?? 0 })))
+    return cached && withLocalCounts(overlay('projects', cached).map(withDefaults))
   })
   const timer = useRef<number>(undefined)
 
@@ -32,12 +39,17 @@ export function useProjects() {
     if (!(await hasSession())) return setProjects((ps) => ps ?? [])
     const { data, error } = await supabase
       .from('projects')
-      .select('id, name, position, created_at, issues(count)')
+      .select('id, name, position, created_at, invite_token, issues(count), project_members(count)')
       .neq('issues.status', 'done')
       .order('position')
     if (error) return setProjects((ps) => ps ?? [])
-    const rows = data.map(({ issues, ...p }) => ({ ...p, open: (issues as { count: number }[])[0]?.count ?? 0 }))
-    const merged = overlay('projects', rows).map((p) => ({ ...p, open: p.open ?? 0 }))
+    const count = (x: unknown) => (x as { count: number }[])[0]?.count
+    const rows = data.map(({ issues, project_members, ...p }) => ({
+      ...p,
+      open: count(issues) ?? 0,
+      members: count(project_members) ?? 1,
+    }))
+    const merged = overlay('projects', rows).map(withDefaults)
     // Server counts are fresher, unless local edits are still waiting to be sent.
     setProjects(pendingCount() ? withLocalCounts(merged) : merged)
   }, [])
@@ -48,7 +60,7 @@ export function useProjects() {
 
   useEffect(() => {
     load()
-    // Any change to projects or issues may alter names or open counts: debounce a full reload.
+    // Any change to projects, members or issues may alter names or counts: debounce a full reload.
     const reload = () => {
       clearTimeout(timer.current)
       timer.current = window.setTimeout(load, 300)
@@ -57,6 +69,7 @@ export function useProjects() {
       .channel(`projects:${uuid()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_members' }, reload)
       .subscribe()
     const offReject = onReject(load)
     return () => {
@@ -72,7 +85,7 @@ export function useProjects() {
     (name: string) => {
       const list = projects ?? []
       const row = { id: uuid(), name, position: between(list.at(-1)?.position, undefined), created_at: new Date().toISOString() }
-      setProjects([...list, { ...row, open: 0 }])
+      setProjects([...list, { ...row, open: 0, members: 1 }])
       enqueue({ table: 'projects', id: row.id, kind: 'upsert', data: row })
       return row.id
     },
@@ -84,15 +97,50 @@ export function useProjects() {
     enqueue({ table: 'projects', id, kind: 'update', data: { name } })
   }, [])
 
-  const remove = useCallback((id: string) => {
+  /** Drop a project from this device, once deleted or left. */
+  const forget = useCallback((id: string) => {
     setProjects((ps) => ps?.filter((p) => p.id !== id) ?? null)
     // Issue writes for this project would fail once it is gone (the delete cascades on the server).
     discard((op) => op.table === 'issues' && op.data?.project_id === id)
     removeCache(`issues:${id}`)
-    enqueue({ table: 'projects', id, kind: 'delete' })
   }, [])
 
-  return { projects, create, rename, remove }
+  const remove = useCallback(
+    (id: string) => {
+      forget(id)
+      enqueue({ table: 'projects', id, kind: 'delete' })
+    },
+    [forget],
+  )
+
+  /** Leaving needs the network: the project stays until the server confirms. */
+  const leave = useCallback(
+    async (id: string) => {
+      const { error } = await supabase.rpc('leave_project', { pid: id })
+      if (error) return toast('Could not leave the project')
+      forget(id)
+    },
+    [forget],
+  )
+
+  /** Invite link of a project, made on first use; `reset` replaces it so older links stop working. */
+  const inviteLink = useCallback(
+    async (id: string, reset = false) => {
+      let token = reset ? null : projects?.find((p) => p.id === id)?.invite_token
+      if (!token) {
+        const next = uuid()
+        const { data, error } = await supabase.from('projects').update({ invite_token: next }).eq('id', id).select('id')
+        // No row back: the project was created offline and has not reached the server yet.
+        if (error || !data.length) return null
+        token = next
+        setProjects((ps) => ps?.map((p) => (p.id === id ? { ...p, invite_token: next } : p)) ?? null)
+      }
+      return `${location.origin}${location.pathname}${href({ name: 'join', token })}`
+    },
+    [projects],
+  )
+
+  return { projects, create, rename, remove, leave, inviteLink }
 }
 
 /** Project header info: cached or pending locally first, then confirmed by the server. */
@@ -111,7 +159,7 @@ export function useProject(id: string) {
       if (data) {
         // Remember it so the header still shows its name offline.
         const cached = readCache<ProjectRow[]>('projects') ?? []
-        if (!cached.some((p) => p.id === data.id)) writeCache('projects', [...cached, { ...data, open: 0 }])
+        if (!cached.some((p) => p.id === data.id)) writeCache('projects', [...cached, { ...data, open: 0, members: 1 }])
       }
       // A project created offline is not on the server yet.
       setProject(data ? (overlay('projects', [data])[0] ?? null) : (local() ?? null))

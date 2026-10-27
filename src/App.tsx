@@ -7,6 +7,7 @@ import { Projects } from './pages/Projects'
 import { Board } from './pages/Board'
 import { AllIssues } from './pages/AllIssues'
 import { Notes } from './pages/Notes'
+import { Join } from './pages/Join'
 import { Toaster } from './components/Toaster'
 
 export function App() {
@@ -43,6 +44,8 @@ export function App() {
     <>
       {!signedIn ? (
         <Login />
+      ) : route.name === 'join' ? (
+        <Join key={route.token} token={route.token} />
       ) : route.name === 'board' ? (
         <Board key={route.projectId} projectId={route.projectId} />
       ) : route.name === 'all' ? (
