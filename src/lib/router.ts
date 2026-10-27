@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react'
 
-export type Route = { name: 'projects' } | { name: 'notes' } | { name: 'all' } | { name: 'board'; projectId: string }
+export type Route =
+  | { name: 'projects' }
+  | { name: 'notes' }
+  | { name: 'all' }
+  | { name: 'board'; projectId: string }
+  | { name: 'join'; token: string }
 
 function parse(hash: string): Route {
   if (hash.startsWith('#/all')) return { name: 'all' }
   if (hash.startsWith('#/notes')) return { name: 'notes' }
+  const join = hash.match(/^#\/join\/([\w-]+)/)
+  if (join) return { name: 'join', token: join[1] }
   const m = hash.match(/^#\/p\/([\w-]+)/)
   return m ? { name: 'board', projectId: m[1] } : { name: 'projects' }
 }
@@ -19,8 +26,14 @@ export function useRoute(): Route {
   return route
 }
 
+export function href(route: Route): string {
+  if (route.name === 'board') return `#/p/${route.projectId}`
+  if (route.name === 'join') return `#/join/${route.token}`
+  return route.name === 'projects' ? '#/' : `#/${route.name}`
+}
+
 export function navigate(route: Route) {
-  location.hash = route.name === 'board' ? `#/p/${route.projectId}` : route.name === 'projects' ? '#/' : `#/${route.name}`
+  location.hash = href(route)
 }
 
 const LAST_KEY = 'last-project'

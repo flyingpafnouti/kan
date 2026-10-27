@@ -43,6 +43,8 @@ export interface Project {
   name: string
   position: number
   created_at: string
+  /** Secret of the invite link, null until shared. Missing on rows cached before sharing existed. */
+  invite_token?: string | null
 }
 
 export interface Issue {

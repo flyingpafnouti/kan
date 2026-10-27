@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { navigate } from '../lib/router'
+import { toast } from '../lib/toast'
 import { search } from '../lib/fuzzy'
 import { HomeHeader } from '../components/HomeHeader'
 import { ShortcutsHelp } from '../components/ShortcutsHelp'
@@ -8,7 +9,7 @@ import { useProjects, type ProjectRow } from '../hooks/useProjects'
 import { ChevronIcon, MoreIcon, PlusIcon } from '../components/icons'
 
 export function Projects() {
-  const { projects, create, rename, remove } = useProjects()
+  const { projects, create, rename, remove, leave, inviteLink } = useProjects()
   const [name, setName] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   // Keyboard selection: 'all' or a project id.
@@ -62,6 +63,18 @@ export function Projects() {
     if (selected) document.querySelector(`[data-nav-id="${selected}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
+  async function share(p: ProjectRow, reset: boolean) {
+    const link = await inviteLink(p.id, reset)
+    if (!link) return toast('Sharing needs a connection')
+    try {
+      await navigator.clipboard.writeText(link)
+      toast(reset ? 'New link copied, the old one no longer works' : 'Invite link copied')
+    } catch {
+      // Clipboard needs HTTPS (missing on the LAN dev server): let the user copy it by hand.
+      prompt('Invite link', link)
+    }
+  }
+
   function submit(e: FormEvent) {
     e.preventDefault()
     const n = name.trim()
@@ -100,8 +113,17 @@ export function Projects() {
                 if (n && n !== p.name) rename(p.id, n)
                 setEditing(null)
               }}
+              onShare={(reset) => share(p, reset)}
+              onLeave={() => {
+                if (confirm(`Leave "${p.name}"? The other members keep it.`)) leave(p.id)
+                setEditing(null)
+              }}
               onDelete={() => {
-                if (confirm(`Delete "${p.name}" and all its issues?`)) remove(p.id)
+                const question =
+                  p.members > 1
+                    ? `Delete "${p.name}" and all its issues for all ${p.members} members?`
+                    : `Delete "${p.name}" and all its issues?`
+                if (confirm(question)) remove(p.id)
                 setEditing(null)
               }}
             />
@@ -122,6 +144,9 @@ export function Projects() {
                   <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs tabular-nums text-neutral-500 dark:bg-neutral-800">
                     {p.open}
                   </span>
+                )}
+                {p.members > 1 && (
+                  <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">Shared</span>
                 )}
                 <ChevronIcon className="ml-auto shrink-0 text-neutral-300 dark:text-neutral-700" />
               </button>
@@ -174,40 +199,65 @@ export function Projects() {
 function EditRow({
   project,
   onDone,
+  onShare,
+  onLeave,
   onDelete,
 }: {
   project: ProjectRow
   onDone: (name: string) => void
+  onShare: (reset: boolean) => void
+  onLeave: () => void
   onDelete: () => void
 }) {
   const [value, setValue] = useState(project.name)
+  const action = 'rounded-xl px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800'
   return (
-    <li className="flex items-center gap-2 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-accent dark:bg-neutral-900">
-      <form
-        className="min-w-0 flex-1"
-        onSubmit={(e) => {
-          e.preventDefault()
-          onDone(value.trim())
-        }}
-      >
-        <input
-          autoFocus
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => e.key === 'Escape' && onDone('')}
-          enterKeyHint="done"
-          className="w-full bg-transparent px-2 py-2 text-[17px] font-medium outline-none"
-        />
-      </form>
-      <button onClick={onDelete} className="rounded-xl px-3 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950">
-        Delete
-      </button>
-      <button
-        onClick={() => onDone(value.trim())}
-        className="rounded-xl bg-neutral-100 px-3 py-2 text-sm font-medium dark:bg-neutral-800"
-      >
-        OK
-      </button>
+    <li className="rounded-2xl bg-white p-2 shadow-sm ring-1 ring-accent dark:bg-neutral-900">
+      <div className="flex items-center gap-2">
+        <form
+          className="min-w-0 flex-1"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onDone(value.trim())
+          }}
+        >
+          <input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && onDone('')}
+            enterKeyHint="done"
+            className="w-full bg-transparent px-2 py-2 text-[17px] font-medium outline-none"
+          />
+        </form>
+        <button
+          onClick={() => onDone(value.trim())}
+          className="rounded-xl bg-neutral-100 px-3 py-2 text-sm font-medium dark:bg-neutral-800"
+        >
+          OK
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-1 pt-1">
+        <button onClick={() => onShare(false)} className={action}>
+          Share link
+        </button>
+        {project.invite_token && (
+          <button onClick={() => onShare(true)} className={action}>
+            Reset link
+          </button>
+        )}
+        {project.members > 1 && (
+          <button onClick={onLeave} className={action}>
+            Leave
+          </button>
+        )}
+        <button
+          onClick={onDelete}
+          className="ml-auto rounded-xl px-3 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+        >
+          Delete
+        </button>
+      </div>
     </li>
   )
 }
