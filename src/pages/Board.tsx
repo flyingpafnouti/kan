@@ -19,7 +19,8 @@ import { STATUSES, doneAtFor, doneSince, isArchived, type Issue, type Status } f
 import { between } from '../lib/position'
 import { navigate, rememberProject } from '../lib/router'
 import { useIssues } from '../hooks/useIssues'
-import { useProject } from '../hooks/useProjects'
+import { useProject, useProjects } from '../hooks/useProjects'
+import { toast } from '../lib/toast'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useSwipe } from '../hooks/useSwipe'
 import { useIssueKeys } from '../hooks/useIssueKeys'
@@ -37,7 +38,8 @@ const isStatus = (id: UniqueIdentifier): id is Status => STATUSES.some((s) => s.
 
 export function Board({ projectId }: { projectId: string }) {
   const project = useProject(projectId)
-  const { issues, setIssues, column, add, update, setStatus, remove } = useIssues(projectId)
+  const { issues, setIssues, column, add, update, setStatus, remove, copyTo } = useIssues(projectId)
+  const { projects } = useProjects()
   // Touch screens, tablets included, get one column at a time with tabs and swipes.
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const [tab, setTab] = useState<Status>('todo')
@@ -309,6 +311,14 @@ export function Board({ projectId }: { projectId: string }) {
           onPrev={prev && (() => step(prev.id))}
           onNext={next && (() => step(next.id))}
           instant={open.id === steppedTo}
+          projects={projects}
+          onCopy={(target, text) => {
+            copyTo(open, target, text)
+            const name = projects?.find((p) => p.id === target)?.name ?? 'the project'
+            toast(target === projectId ? 'Copy added on top of To do' : `Copied to ${name}`, {
+              action: target === projectId ? undefined : { label: 'Open', run: () => navigate({ name: 'board', projectId: target }) },
+            })
+          }}
         />
       )}
     </main>

@@ -11,6 +11,15 @@ import { useRefetchOnFocus } from './useRefetchOnFocus'
 
 const COLUMNS = 'id, project_id, title, body, status, priority, position, created_at, updated_at, done_at'
 
+/** Position on top of the project's "To do", from what this device has cached (0 when nothing is). */
+export function topOfTodo(projectId: string) {
+  const known = [...(readCache<Issue[]>(`issues:${projectId}`) ?? []), ...(readCache<Issue[]>('issues:all') ?? [])]
+  const positions = overlay('issues', known)
+    .filter((x) => x.project_id === projectId && x.status === 'todo')
+    .map((x) => x.position)
+  return between(undefined, positions.length ? Math.min(...positions) : undefined)
+}
+
 /** Issues of one project, or of all projects when projectId is null. */
 export function useIssues(projectId: string | null) {
   const cacheKey = `issues:${projectId ?? 'all'}`
@@ -118,6 +127,28 @@ export function useIssues(projectId: string | null) {
     [update, column, issues],
   )
 
+  /** New issue on top of `target`'s "To do" with the same title, notes and priority; `text` is the latest text. */
+  const copyTo = useCallback(
+    (issue: Issue, target: string, text: Pick<Issue, 'title' | 'body'> = issue) => {
+      const now = new Date().toISOString()
+      const row: Issue = {
+        id: uuid(),
+        project_id: target,
+        ...text,
+        status: 'todo',
+        priority: issue.priority ?? null,
+        position: topOfTodo(target),
+        created_at: now,
+        updated_at: now,
+        done_at: null,
+      }
+      // Shown here when copied into this same board (or on All issues).
+      if (!projectId || projectId === target) setIssues((list) => [...(list ?? []), row])
+      enqueue({ table: 'issues', id: row.id, kind: 'upsert', data: { ...row } })
+    },
+    [projectId],
+  )
+
   /** Put a deleted issue back as it was (same id, position and dates). */
   const restore = useCallback((issue: Issue) => {
     setIssues((list) => (list && !list.some((x) => x.id === issue.id) ? [...list, issue] : list))
@@ -133,5 +164,5 @@ export function useIssues(projectId: string | null) {
     [restore],
   )
 
-  return { issues, setIssues, column, add, update, setStatus, remove }
+  return { issues, setIssues, column, add, update, setStatus, remove, copyTo }
 }

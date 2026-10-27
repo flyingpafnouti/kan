@@ -7,6 +7,7 @@ import { AutoTextarea } from './AutoTextarea'
 import { MarkdownField } from './Markdown'
 import { DictationButton } from './DictationButton'
 import { ChevronIcon } from './icons'
+import type { ProjectRow } from '../hooks/useProjects'
 
 interface Props {
   issue: Issue
@@ -20,11 +21,26 @@ interface Props {
   onNext?: () => void
   /** Reached from a neighbour: no opening animation. */
   instant?: boolean
+  /** Targets of "Copy to…", which gets the latest text. */
+  projects?: ProjectRow[] | null
+  onCopy?: (projectId: string, text: { title: string; body: string }) => void
 }
 
 const SAVE_DELAY = 600
 
-export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onClose, onPrev, onNext, instant }: Props) {
+export function IssueSheet({
+  issue,
+  onSave,
+  onStatus,
+  onPriority,
+  onDelete,
+  onClose,
+  onPrev,
+  onNext,
+  instant,
+  projects,
+  onCopy,
+}: Props) {
   const [title, setTitle] = useState(issue.title)
   const [body, setBody] = useState(issue.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -184,14 +200,38 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
               </button>
             ))}
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
               className="rounded-lg py-1 text-sm text-red-500"
             >
               {confirmDelete ? 'Confirm deletion' : 'Delete'}
             </button>
-            <button onClick={close} className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900">
+            {onCopy && projects && projects.length > 0 && (
+              // Kept quiet on purpose: a plain grey label that opens the native project picker.
+              <select
+                value=""
+                onChange={(e) => {
+                  flush()
+                  onCopy(e.target.value, { title: title.trim() || issue.title, body })
+                }}
+                aria-label="Copy to another project"
+                className="ml-auto min-w-0 max-w-36 truncate bg-transparent py-1 text-right text-sm text-neutral-400 outline-none hover:text-neutral-600 dark:hover:text-neutral-300"
+              >
+                <option value="" disabled>
+                  Copy to…
+                </option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id === issue.project_id ? `${p.name} (here)` : p.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={close}
+              className={`${onCopy && projects?.length ? '' : 'ml-auto'} shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900`}
+            >
               Close
             </button>
           </div>

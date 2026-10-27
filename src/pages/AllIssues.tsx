@@ -4,6 +4,7 @@ import { STATUSES, doneSince, isArchived, type Issue, type Status } from '../lib
 import { navigate } from '../lib/router'
 import { useIssues } from '../hooks/useIssues'
 import { useProjects } from '../hooks/useProjects'
+import { toast } from '../lib/toast'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useSwipe } from '../hooks/useSwipe'
 import { useIssueKeys } from '../hooks/useIssueKeys'
@@ -19,7 +20,7 @@ import { SyncBadge } from '../components/SyncBadge'
  * new issues belong to a project. Cards are sorted by priority, then project order, then position.
  */
 export function AllIssues() {
-  const { issues, column, update, setStatus, remove } = useIssues(null)
+  const { issues, column, update, setStatus, remove, copyTo } = useIssues(null)
   const { projects } = useProjects()
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const [tab, setTab] = useState<Status>('todo')
@@ -191,6 +192,14 @@ export function AllIssues() {
           onPrev={prev && (() => step(prev.id))}
           onNext={next && (() => step(next.id))}
           instant={open.id === steppedTo}
+          projects={projects}
+          onCopy={(target, text) => {
+            copyTo(open, target, text)
+            const name = projects?.find((p) => p.id === target)?.name ?? 'the project'
+            toast(target === open.project_id ? 'Copy added on top of To do' : `Copied to ${name}`, {
+              action: target === open.project_id ? undefined : { label: 'Open', run: () => navigate({ name: 'board', projectId: target }) },
+            })
+          }}
         />
       )}
     </main>

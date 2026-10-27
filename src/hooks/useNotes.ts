@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { hasSession, supabase } from '../lib/supabase'
 import type { Issue, Note } from '../lib/types'
-import { between } from '../lib/position'
 import { uuid } from '../lib/id'
 import { toast } from '../lib/toast'
 import { readCache, writeCache } from '../lib/cache'
 import { enqueue, onReject, overlay, overlayRow } from '../lib/outbox'
 import { useRefetchOnFocus } from './useRefetchOnFocus'
+import { topOfTodo } from './useIssues'
 
 const COLUMNS = 'id, body, created_at, updated_at'
 
@@ -21,15 +21,6 @@ export function issueFromNote(text: string) {
   const sentence = line.match(/^.+?[.!?](?=\s)/)?.[0] ?? line
   const cut = Math.min(sentence.length, 500)
   return { title: t.slice(0, cut).trim().replace(/\.$/, '') || 'Idea', body: t.slice(cut).trim() }
-}
-
-/** Position on top of the project's "To do", from what this device has cached (0 when nothing is). */
-function topOfTodo(projectId: string) {
-  const known = [...(readCache<Issue[]>(`issues:${projectId}`) ?? []), ...(readCache<Issue[]>('issues:all') ?? [])]
-  const positions = overlay('issues', known)
-    .filter((x) => x.project_id === projectId && x.status === 'todo')
-    .map((x) => x.position)
-  return between(undefined, positions.length ? Math.min(...positions) : undefined)
 }
 
 /** The user's notes, newest first. */
