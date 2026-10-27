@@ -2,24 +2,22 @@ import { useEffect } from 'react'
 
 /**
  * Reload when the app comes back: phone woke up, tab switched, window focused again, network back.
- * On a desktop the window often stays "visible" while the user works elsewhere, so focus counts too.
- * `every` (ms) also reloads periodically while the page is visible, as a fallback when realtime silently drops.
+ * On a desktop the window often stays "visible" while the user works elsewhere, so focus counts too: it catches
+ * up when realtime has dropped without notice.
  */
-export function useRefetchOnFocus(load: () => void, every?: number) {
+export function useRefetchOnFocus(load: () => void) {
   useEffect(() => {
     const visible = () => document.visibilityState === 'visible'
     const onVisible = () => visible() && load()
     document.addEventListener('visibilitychange', onVisible)
     addEventListener('focus', onVisible)
     addEventListener('online', onVisible)
-    const timer = every ? window.setInterval(onVisible, every) : undefined
     return () => {
       document.removeEventListener('visibilitychange', onVisible)
       removeEventListener('focus', onVisible)
       removeEventListener('online', onVisible)
-      clearInterval(timer)
     }
-  }, [load, every])
+  }, [load])
 }
 
 /** subscribe() callback that reloads after the channel rejoins, to fetch what changed while it was down. */

@@ -10,7 +10,6 @@ import { enqueue, onReject, overlay, overlayRow } from '../lib/outbox'
 import { reloadOnRejoin, useRefetchOnFocus } from './useRefetchOnFocus'
 
 const COLUMNS = 'id, project_id, title, body, status, priority, position, created_at, updated_at, done_at'
-const POLL_MS = 30_000
 
 /** Position on top of the project's "To do", from what this device has cached (0 when nothing is). */
 export function topOfTodo(projectId: string) {
@@ -76,8 +75,7 @@ export function useIssues(projectId: string | null) {
     }
   }, [projectId, load])
 
-  // Boards stay open for long on a desktop: poll as a fallback when realtime drops without notice.
-  useRefetchOnFocus(load, POLL_MS)
+  useRefetchOnFocus(load)
 
   const column = useCallback(
     (status: Status) => (issues ?? []).filter((x) => x.status === status).sort(byPosition),
