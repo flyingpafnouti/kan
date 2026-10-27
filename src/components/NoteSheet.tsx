@@ -3,7 +3,7 @@ import type { Note } from '../lib/types'
 import type { ProjectRow } from '../hooks/useProjects'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { formatDate } from '../lib/date'
-import { AutoTextarea } from './AutoTextarea'
+import { MarkdownField } from './Markdown'
 import { DictationButton } from './DictationButton'
 
 interface Props {
@@ -63,7 +63,7 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
       <div className="relative flex max-h-[85dvh] w-full max-w-lg animate-sheet flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900">
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300 md:hidden dark:bg-neutral-700" />
         <div className="flex-1 overflow-y-auto px-5 pt-4">
-          <AutoTextarea
+          <MarkdownField
             value={body}
             onChange={(v) => {
               setBody(v)

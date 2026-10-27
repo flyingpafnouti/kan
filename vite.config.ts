@@ -6,12 +6,36 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   base: '/kan/',
   server: { host: true },
+  // Pre-bundling would duplicate MathJax modules, and the glyph ranges would register on a copy of the font.
+  optimizeDeps: { exclude: ['@mathjax/src', '@mathjax/mathjax-newcm-font'] },
+  build: {
+    rolldownOptions: {
+      output: {
+        // MathJax and its glyph ranges (~10 MB) go apart, out of the precache: see runtimeCaching below.
+        chunkFileNames: (chunk) =>
+          chunk.moduleIds.some((id) => id.includes('/node_modules/@mathjax/'))
+            ? 'assets/mathjax/[name]-[hash].js'
+            : 'assets/[name]-[hash].js',
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon.svg'],
+      workbox: {
+        globIgnores: ['assets/mathjax/**'],
+        // Hashed names never change: cached at first use, math then renders offline.
+        runtimeCaching: [
+          {
+            urlPattern: /\/assets\/mathjax\//,
+            handler: 'CacheFirst',
+            options: { cacheName: 'mathjax', expiration: { maxEntries: 100 } },
+          },
+        ],
+      },
       manifest: {
         name: 'Issues',
         short_name: 'Issues',

@@ -49,3 +49,4 @@ L'application s'ouvre alors en plein écran sur le dernier projet consulté.
 - Les issues terminées depuis plus de 7 jours quittent la colonne Done pour un volet replié en bas de celle-ci.
 - Le rond à gauche d'une carte fait avancer le statut (To do → In progress → Done).
 - Toucher une carte ouvre la fiche : titre, notes, statut, suppression. Enregistrement automatique.
+- Les notes des issues et les notes sont en Markdown, avec formules TeX rendues par MathJax : `$…$` ou `\(…\)` en ligne, `$$…$$` ou `\[…\]` centrées. Le texte s'affiche mis en forme ; un clic l'ouvre en édition, le curseur sur le bloc cliqué, et quitter le champ réaffiche le rendu. MathJax n'est chargé qu'à la première formule, puis gardé en cache pour l'usage hors ligne.
