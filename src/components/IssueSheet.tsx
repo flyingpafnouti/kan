@@ -4,6 +4,7 @@ import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { formatDate } from '../lib/date'
 import { StatusIcon } from './StatusIcon'
 import { AutoTextarea } from './AutoTextarea'
+import { MarkdownField } from './Markdown'
 import { DictationButton } from './DictationButton'
 import { ChevronIcon } from './icons'
 
@@ -129,7 +130,7 @@ export function IssueSheet({ issue, onSave, onStatus, onPriority, onDelete, onCl
               </div>
             )}
           </div>
-          <AutoTextarea
+          <MarkdownField
             value={body}
             onChange={(v) => {
               setBody(v)
