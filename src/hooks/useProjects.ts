@@ -7,7 +7,7 @@ import { readCache, removeCache, writeCache } from '../lib/cache'
 import { discard, enqueue, onReject, overlay, pendingCount } from '../lib/outbox'
 import { toast } from '../lib/toast'
 import { href } from '../lib/router'
-import { useRefetchOnFocus } from './useRefetchOnFocus'
+import { reloadOnRejoin, useRefetchOnFocus } from './useRefetchOnFocus'
 
 export interface ProjectRow extends Project {
   open: number
@@ -82,7 +82,7 @@ export function useProjects() {
       .channel(`projects:${uuid()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_members' }, reload)
-      .subscribe()
+      .subscribe(reloadOnRejoin(load))
     const offReject = onReject(load)
     return () => {
       clearTimeout(timer.current)
@@ -185,8 +185,8 @@ export function useProject(id: string) {
 const LIST_COLUMNS = 'id, name, position, created_at'
 
 /**
- * Names and order of the projects, without the counts of useProjects: the cached list, fetched once on mount,
- * then kept current from realtime rows alone. useProjects reloads everything on each issue change, which pages
+ * Names and order of the projects, without the counts of useProjects: the cached list, fetched on mount and when
+ * the app comes back, and kept current from realtime rows in between. useProjects reloads everything on each issue change, which pages
  * that only show project names do not need.
  */
 export function useProjectList() {
@@ -194,13 +194,14 @@ export function useProjectList() {
     const cached = readCache<Project[]>('projects')
     return cached && overlay('projects', cached)
   })
+  const load = useCallback(async () => {
+    if (!(await hasSession())) return
+    const { data, error } = await supabase.from('projects').select(LIST_COLUMNS).order('position')
+    if (!error) setList(overlay('projects', data))
+  }, [])
+
   useEffect(() => {
-    let live = true
-    ;(async () => {
-      if (!(await hasSession())) return
-      const { data, error } = await supabase.from('projects').select(LIST_COLUMNS).order('position')
-      if (live && !error) setList(overlay('projects', data))
-    })()
+    load()
     // Each issue change bumps its project's updated_at, so events are frequent: apply them without a query.
     const channel = supabase
       .channel(`project-list:${uuid()}`)
@@ -211,11 +212,13 @@ export function useProjectList() {
           [...(ps ?? []).filter((x) => x.id !== id), { id, name, position, created_at }].sort((a, b) => a.position - b.position),
         )
       })
-      .subscribe()
+      .subscribe(reloadOnRejoin(load))
     return () => {
-      live = false
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [load])
+
+  useRefetchOnFocus(load)
+
   return list
 }

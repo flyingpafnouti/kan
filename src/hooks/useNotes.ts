@@ -6,7 +6,7 @@ import { uuid } from '../lib/id'
 import { toast } from '../lib/toast'
 import { readCache, writeCache } from '../lib/cache'
 import { enqueue, onReject, overlay, overlayRow } from '../lib/outbox'
-import { useRefetchOnFocus } from './useRefetchOnFocus'
+import { reloadOnRejoin, useRefetchOnFocus } from './useRefetchOnFocus'
 import { topOfTodo } from './useIssues'
 
 const COLUMNS = 'id, body, created_at, updated_at'
@@ -65,7 +65,7 @@ export function useNotes() {
         const id = (p.old as Partial<Note>).id
         setList((l) => l?.filter((x) => x.id !== id) ?? null)
       })
-      .subscribe()
+      .subscribe(reloadOnRejoin(load))
     const offReject = onReject(load)
     return () => {
       offReject()
