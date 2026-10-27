@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { STATUSES, doneSince, isArchived, type Issue, type Status } from '../lib/types'
 import { navigate } from '../lib/router'
 import { useIssues } from '../hooks/useIssues'
-import { useProjects } from '../hooks/useProjects'
+import { useProjectList } from '../hooks/useProjects'
 import { toast } from '../lib/toast'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useSwipe } from '../hooks/useSwipe'
@@ -21,7 +21,7 @@ import { SyncBadge } from '../components/SyncBadge'
  */
 export function AllIssues() {
   const { issues, column, update, setStatus, remove, copyTo } = useIssues(null)
-  const { projects } = useProjects()
+  const projects = useProjectList()
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const [tab, setTab] = useState<Status>('todo')
   const [openId, setOpenId] = useState<string | null>(null)

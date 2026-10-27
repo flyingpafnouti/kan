@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { PRIORITIES, STATUSES, type Issue, type Priority, type Status } from '../lib/types'
+import { PRIORITIES, STATUSES, type Issue, type Priority, type Project, type Status } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { formatDate } from '../lib/date'
 import { StatusIcon } from './StatusIcon'
@@ -7,7 +7,6 @@ import { AutoTextarea } from './AutoTextarea'
 import { MarkdownField } from './Markdown'
 import { DictationButton } from './DictationButton'
 import { ChevronIcon } from './icons'
-import type { ProjectRow } from '../hooks/useProjects'
 
 interface Props {
   issue: Issue
@@ -22,7 +21,7 @@ interface Props {
   /** Reached from a neighbour: no opening animation. */
   instant?: boolean
   /** Targets of "Copy to…", which gets the latest text. */
-  projects?: ProjectRow[] | null
+  projects?: Project[] | null
   onCopy?: (projectId: string, text: { title: string; body: string }) => void
 }
 

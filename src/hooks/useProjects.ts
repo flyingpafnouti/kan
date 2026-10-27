@@ -72,7 +72,8 @@ export function useProjects() {
 
   useEffect(() => {
     load()
-    // Any change to projects, members or issues may alter names or counts: debounce a full reload.
+    // Any change to projects or members may alter names or counts: debounce a full reload. Issue changes need no
+    // subscription of their own, since each one bumps its project's updated_at (issues_touch_project trigger).
     const reload = () => {
       clearTimeout(timer.current)
       timer.current = window.setTimeout(load, 300)
@@ -80,7 +81,6 @@ export function useProjects() {
     const channel = supabase
       .channel(`projects:${uuid()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, reload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'issues' }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_members' }, reload)
       .subscribe()
     const offReject = onReject(load)
@@ -180,4 +180,42 @@ export function useProject(id: string) {
     })()
   }, [id])
   return project
+}
+
+const LIST_COLUMNS = 'id, name, position, created_at'
+
+/**
+ * Names and order of the projects, without the counts of useProjects: the cached list, fetched once on mount,
+ * then kept current from realtime rows alone. useProjects reloads everything on each issue change, which pages
+ * that only show project names do not need.
+ */
+export function useProjectList() {
+  const [list, setList] = useState<Project[] | null>(() => {
+    const cached = readCache<Project[]>('projects')
+    return cached && overlay('projects', cached)
+  })
+  useEffect(() => {
+    let live = true
+    ;(async () => {
+      if (!(await hasSession())) return
+      const { data, error } = await supabase.from('projects').select(LIST_COLUMNS).order('position')
+      if (live && !error) setList(overlay('projects', data))
+    })()
+    // Each issue change bumps its project's updated_at, so events are frequent: apply them without a query.
+    const channel = supabase
+      .channel(`project-list:${uuid()}`)
+      .on<Project>('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (p) => {
+        if (p.eventType === 'DELETE') return setList((ps) => ps?.filter((x) => x.id !== p.old.id) ?? null)
+        const { id, name, position, created_at } = p.new
+        setList((ps) =>
+          [...(ps ?? []).filter((x) => x.id !== id), { id, name, position, created_at }].sort((a, b) => a.position - b.position),
+        )
+      })
+      .subscribe()
+    return () => {
+      live = false
+      supabase.removeChannel(channel)
+    }
+  }, [])
+  return list
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { navigate } from '../lib/router'
 import { toast } from '../lib/toast'
 import { useNotes } from '../hooks/useNotes'
-import { useProjects } from '../hooks/useProjects'
+import { useProjectList } from '../hooks/useProjects'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { HomeHeader } from '../components/HomeHeader'
@@ -22,7 +22,7 @@ const SHORT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short',
  */
 export function Notes() {
   const { notes, add, update, remove, toIssue } = useNotes()
-  const { projects } = useProjects()
+  const projects = useProjectList()
   const desktop = useMediaQuery('(pointer: fine)')
   const [draft, setDraft] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)

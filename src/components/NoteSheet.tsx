@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Note } from '../lib/types'
-import type { ProjectRow } from '../hooks/useProjects'
+import type { Note, Project } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { formatDate } from '../lib/date'
 import { MarkdownField } from './Markdown'
@@ -8,7 +7,7 @@ import { DictationButton } from './DictationButton'
 
 interface Props {
   note: Note
-  projects: ProjectRow[] | null
+  projects: Project[] | null
   onSave: (body: string) => void
   onDelete: () => void
   /** Turns the note, with its latest text, into an issue of that project. */

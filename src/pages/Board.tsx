@@ -19,7 +19,7 @@ import { STATUSES, doneAtFor, doneSince, isArchived, type Issue, type Status } f
 import { between } from '../lib/position'
 import { navigate, rememberProject } from '../lib/router'
 import { useIssues } from '../hooks/useIssues'
-import { useProject, useProjects } from '../hooks/useProjects'
+import { useProject, useProjectList } from '../hooks/useProjects'
 import { toast } from '../lib/toast'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useSwipe } from '../hooks/useSwipe'
@@ -39,7 +39,7 @@ const isStatus = (id: UniqueIdentifier): id is Status => STATUSES.some((s) => s.
 export function Board({ projectId }: { projectId: string }) {
   const project = useProject(projectId)
   const { issues, setIssues, column, add, update, setStatus, remove, copyTo } = useIssues(projectId)
-  const { projects } = useProjects()
+  const projects = useProjectList()
   // Touch screens, tablets included, get one column at a time with tabs and swipes.
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const [tab, setTab] = useState<Status>('todo')
