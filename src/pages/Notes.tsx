@@ -10,6 +10,8 @@ import { AutoTextarea } from '../components/AutoTextarea'
 import { DictationButton } from '../components/DictationButton'
 import { NoteSheet } from '../components/NoteSheet'
 import { ShortcutsHelp } from '../components/ShortcutsHelp'
+import { NoteSearchPalette } from '../components/SearchPalette'
+import { Markdown } from '../components/Markdown'
 import { MicIcon, SendIcon, StopIcon } from '../components/icons'
 
 const SHORT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -25,15 +27,16 @@ export function Notes() {
   const [draft, setDraft] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  const [searching, setSearching] = useState(false)
   const composer = useRef<HTMLTextAreaElement>(null)
   const dictation = useDictation(add)
   const recording = dictation.state === 'recording'
 
-  // ↑ / ↓ select a note, Enter opens it, any other printable key starts a new one; Escape or Backspace go back.
+  // ↑ / ↓ select a note, Enter opens it, "/" searches, any other printable key starts a new one; Escape or Backspace go back.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]')
-      if (typing || openId || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return
+      if (typing || openId || searching || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return
       const ids = notes?.map((n) => n.id) ?? []
       const i = selected ? ids.indexOf(selected) : -1
       if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && ids.length) {
@@ -46,6 +49,9 @@ export function Notes() {
         e.preventDefault()
         if (i >= 0) setSelected(null)
         else navigate({ name: 'projects' })
+      } else if (e.key === '/' && notes?.length) {
+        e.preventDefault()
+        setSearching(true)
       } else if (e.key.length === 1 && e.key !== ' ' && e.key !== '?') {
         // "?" toggles the shortcuts. Focusing before the default action lets the browser type the key into the field.
         composer.current?.focus()
@@ -53,7 +59,7 @@ export function Notes() {
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
-  }, [notes, selected, openId])
+  }, [notes, selected, openId, searching])
 
   useEffect(() => {
     if (selected) document.querySelector(`[data-nav-id="${selected}"]`)?.scrollIntoView({ block: 'nearest' })
@@ -70,7 +76,7 @@ export function Notes() {
 
   return (
     <main className={`mx-auto min-h-dvh max-w-xl px-4 pt-safe ${desktop ? 'pb-safe' : 'pb-28'}`}>
-      <HomeHeader current="notes" keys={!open} />
+      <HomeHeader current="notes" keys={!open && !searching} />
 
       {notes && (
         <form
@@ -124,7 +130,9 @@ export function Notes() {
         {notes?.map((n) => (
           <li key={n.id} data-nav-id={n.id}>
             <button
-              onClick={() => {
+              onClick={(e) => {
+                // A link in the preview opens in its own tab, not the note.
+                if ((e.target as HTMLElement).closest('a')) return
                 setSelected(n.id)
                 setOpenId(n.id)
               }}
@@ -132,7 +140,7 @@ export function Notes() {
                 selected === n.id ? 'ring-accent/50' : 'ring-neutral-200/70 dark:ring-neutral-800'
               }`}
             >
-              <p className="line-clamp-5 text-[15px] leading-snug break-words whitespace-pre-wrap">{n.body}</p>
+              <NotePreview text={n.body} />
               <p className="mt-1.5 text-xs text-neutral-400">{SHORT.format(new Date(n.created_at))}</p>
             </button>
           </li>
@@ -162,6 +170,18 @@ export function Notes() {
 
       {desktop && notes && <ShortcutsHelp />}
 
+      {searching && notes && (
+        <NoteSearchPalette
+          notes={notes}
+          onPick={(note) => {
+            setSearching(false)
+            setSelected(note.id)
+            setOpenId(note.id)
+          }}
+          onClose={() => setSearching(false)}
+        />
+      )}
+
       {open && (
         <NoteSheet
           key={open.id}
@@ -183,5 +203,27 @@ export function Notes() {
         />
       )}
     </main>
+  )
+}
+
+/** The note rendered as Markdown, cut to a few lines with a fade when it runs longer. */
+function NotePreview({ text }: { text: string }) {
+  const box = useRef<HTMLDivElement>(null)
+  const [cut, setCut] = useState(false)
+
+  // The content's height changes after render too, when MathJax typesets the formulas.
+  useEffect(() => {
+    const el = box.current
+    const content = el?.firstElementChild
+    if (!el || !content) return
+    const observer = new ResizeObserver(() => setCut(content.scrollHeight > el.clientHeight + 1))
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div ref={box} className={`max-h-36 overflow-hidden ${cut ? 'mask-b-from-60%' : ''}`}>
+      <Markdown text={text} className="text-[15px] leading-snug" />
+    </div>
   )
 }
