@@ -83,3 +83,9 @@ export const SearchIcon = (p: P) => (
     <path d="m20 20-3.5-3.5" />
   </svg>
 )
+
+export const GripIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M20 10 10 20M20 16l-4 4" />
+  </svg>
+)

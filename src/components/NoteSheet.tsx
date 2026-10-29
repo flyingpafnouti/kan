@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import type { Note, Project } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { formatDate } from '../lib/date'
 import { MarkdownField } from './Markdown'
 import { DictationButton } from './DictationButton'
+import { GripIcon } from './icons'
 
 interface Props {
   note: Note
@@ -17,11 +19,42 @@ interface Props {
 
 const SAVE_DELAY = 600
 
+type Size = { w: number; h: number }
+
+const SIZE_KEY = 'note-size'
+const MIN_W = 320
+const MIN_H = 240
+/** Room kept around the panel, matches md:p-6. */
+const GUTTER = 48
+
+/** Size the user dragged the panel to, kept on this device for the next notes. */
+function storedSize(): Size | null {
+  try {
+    const s = JSON.parse(localStorage.getItem(SIZE_KEY) ?? 'null')
+    return typeof s?.w === 'number' && typeof s?.h === 'number' ? s : null
+  } catch {
+    return null
+  }
+}
+
+function storeSize(s: Size | null) {
+  try {
+    if (s) localStorage.setItem(SIZE_KEY, JSON.stringify(s))
+    else localStorage.removeItem(SIZE_KEY)
+  } catch {
+    /* storage unavailable: the size lasts until the sheet closes */
+  }
+}
+
 export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose }: Props) {
   const [body, setBody] = useState(note.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const saved = useRef(note.body)
   const timer = useRef<number>(undefined)
+  const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
+  const [size, setSize] = useState(storedSize)
+  const panel = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ x: number; y: number } & Size>(undefined)
 
   // An emptied note is not saved (the server refuses it) and goes away on close.
   const flush = (b = body) => {
@@ -46,6 +79,33 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
     schedule(b)
   })
 
+  // The panel is centered: it grows on both sides, hence twice the pointer move to keep the corner under it.
+  const resize = {
+    onPointerDown: (e: PointerEvent) => {
+      e.preventDefault()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      const r = panel.current!.getBoundingClientRect()
+      drag.current = { x: e.clientX, y: e.clientY, w: r.width, h: r.height }
+    },
+    onPointerMove: (e: PointerEvent) => {
+      const d = drag.current
+      if (!d) return
+      setSize({
+        w: Math.min(innerWidth - GUTTER, Math.max(MIN_W, d.w + 2 * (e.clientX - d.x))),
+        h: Math.min(innerHeight - GUTTER, Math.max(MIN_H, d.h + 2 * (e.clientY - d.y))),
+      })
+    },
+    onPointerUp: () => {
+      drag.current = undefined
+      const r = panel.current!.getBoundingClientRect()
+      storeSize({ w: Math.round(r.width), h: Math.round(r.height) })
+    },
+    onDoubleClick: () => {
+      setSize(null)
+      storeSize(null)
+    },
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -59,7 +119,15 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center md:p-6">
       <div className="absolute inset-0 animate-fade bg-black/40" onClick={close} />
-      <div className="relative flex max-h-[85dvh] w-full max-w-lg animate-sheet flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900">
+      <div
+        ref={panel}
+        style={
+          desktop && size
+            ? { width: size.w, height: size.h, maxWidth: `calc(100vw - ${GUTTER}px)`, maxHeight: `calc(100dvh - ${GUTTER}px)` }
+            : undefined
+        }
+        className="relative flex max-h-[85dvh] w-full max-w-lg animate-sheet flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900"
+      >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300 md:hidden dark:bg-neutral-700" />
         <div className="flex-1 overflow-y-auto px-5 pt-4">
           <MarkdownField
@@ -115,6 +183,15 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
             Close
           </button>
         </div>
+        {desktop && (
+          <div
+            {...resize}
+            title="Drag to resize, double-click to reset"
+            className="absolute right-0 bottom-0 cursor-nwse-resize touch-none p-1 text-neutral-300 hover:text-neutral-500 dark:text-neutral-600 dark:hover:text-neutral-400"
+          >
+            <GripIcon width={14} height={14} />
+          </div>
+        )}
       </div>
     </div>
   )
