@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 export type Theme = 'light' | 'dark'
 
 const KEY = 'theme'
-const COLORS: Record<Theme, string> = { light: '#fafafa', dark: '#162137' }
+const COLORS: Record<Theme, string> = { light: '#fafafa', dark: '#1f2b42' }
 const system = matchMedia('(prefers-color-scheme: dark)')
 
 function stored(): Theme | null {
