@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import type { Note, Project } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useMediaQuery } from '../hooks/useMediaQuery'
+import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
 import { MarkdownField } from './Markdown'
 import { DictationButton } from './DictationButton'
@@ -52,6 +53,7 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
   latest.current = body
   /** Deleted or turned into an issue: nothing left to save. */
   const ended = useRef(false)
+  useScrollLock()
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const [size, setSize] = useState(storedSize)
   const panel = useRef<HTMLDivElement>(null)

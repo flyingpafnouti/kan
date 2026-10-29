@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { PRIORITIES, STATUSES, type Issue, type Priority, type Project, type Status } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
+import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
 import { StatusIcon } from './StatusIcon'
 import { AutoTextarea } from './AutoTextarea'
@@ -40,6 +41,7 @@ export function IssueSheet({
   projects,
   onCopy,
 }: Props) {
+  useScrollLock()
   const [title, setTitle] = useState(issue.title)
   const [body, setBody] = useState(issue.body)
   const [confirmDelete, setConfirmDelete] = useState(false)

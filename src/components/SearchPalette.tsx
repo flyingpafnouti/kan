@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import { PRIORITIES, type Issue, type Note } from '../lib/types'
 import { search } from '../lib/fuzzy'
 import { issueFromNote } from '../hooks/useNotes'
+import { useScrollLock } from '../hooks/useScrollLock'
 import { StatusIcon } from './StatusIcon'
 import { SearchIcon } from './icons'
 
@@ -72,6 +73,7 @@ interface PaletteProps<T extends Searchable> {
 }
 
 function Palette<T extends Searchable>({ items, noun, onPick, onClose, icon, badge, muted }: PaletteProps<T>) {
+  useScrollLock()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const list = useRef<HTMLUListElement>(null)
