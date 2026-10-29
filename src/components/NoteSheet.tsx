@@ -17,8 +17,6 @@ interface Props {
   onClose: () => void
 }
 
-const SAVE_DELAY = 600
-
 type Size = { w: number; h: number }
 
 const SIZE_KEY = 'note-size'
@@ -50,33 +48,50 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
   const [body, setBody] = useState(note.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const saved = useRef(note.body)
-  const timer = useRef<number>(undefined)
+  const latest = useRef(body)
+  latest.current = body
+  /** Deleted or turned into an issue: nothing left to save. */
+  const ended = useRef(false)
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const [size, setSize] = useState(storedSize)
   const panel = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number } & Size>(undefined)
 
-  // An emptied note is not saved (the server refuses it) and goes away on close.
-  const flush = (b = body) => {
-    clearTimeout(timer.current)
-    if (!b.trim() || b === saved.current) return
+  // Saved once, on close, rather than while typing. An emptied note is not saved (the server refuses it)
+  // and goes away on close.
+  const flush = () => {
+    const b = latest.current
+    if (ended.current || !b.trim() || b === saved.current) return
     saved.current = b
     onSave(b)
   }
-  const schedule = (b: string) => {
-    clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => flush(b), SAVE_DELAY)
+  const end = () => {
+    ended.current = true
   }
   const close = () => {
-    if (!body.trim()) return onDelete()
+    if (!body.trim()) {
+      end()
+      return onDelete()
+    }
     flush()
     onClose()
   }
 
+  // Safety net for edits that never reach close: the app sent to the background (and maybe killed),
+  // or the sheet unmounted by a navigation.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      flush()
+    }
+  }, [])
+
   const dictation = useDictation((text) => {
-    const b = body.trim() ? `${body.trimEnd()}${body.endsWith('\n') ? '' : ' '}${text}` : text
-    setBody(b)
-    schedule(b)
+    setBody(body.trim() ? `${body.trimEnd()}${body.endsWith('\n') ? '' : ' '}${text}` : text)
   })
 
   // The panel is centered: it grows on both sides, hence twice the pointer move to keep the corner under it.
@@ -132,10 +147,7 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
         <div className="flex-1 overflow-y-auto px-5 pt-4">
           <MarkdownField
             value={body}
-            onChange={(v) => {
-              setBody(v)
-              schedule(v)
-            }}
+            onChange={setBody}
             className="min-h-32 text-[15px] leading-relaxed"
             placeholder={
               dictation.state === 'recording' ? 'Speak…' : dictation.state === 'transcribing' ? 'Transcribing…' : 'Idea…'
@@ -150,7 +162,11 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
         </div>
         <div className="flex items-center gap-2 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
           <button
-            onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
+            onClick={() => {
+              if (!confirmDelete) return setConfirmDelete(true)
+              end()
+              onDelete()
+            }}
             className="rounded-lg py-1 text-sm text-red-500"
           >
             {confirmDelete ? 'Confirm deletion' : 'Delete'}
@@ -160,7 +176,7 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
               value=""
               disabled={!body.trim()}
               onChange={(e) => {
-                clearTimeout(timer.current)
+                end()
                 onToIssue(e.target.value, body)
               }}
               aria-label="Make it an issue"
