@@ -89,3 +89,10 @@ export const GripIcon = (p: P) => (
     <path d="M20 10 10 20M20 16l-4 4" />
   </svg>
 )
+
+export const KeyboardIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+  </svg>
+)

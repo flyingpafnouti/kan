@@ -92,7 +92,8 @@ export function IssueSheet({
         if (target) onStatus(target.id)
         return
       }
-      if (e.key !== 'Escape') return
+      // Escape, or Ctrl / ⌘ + Enter from the text fields.
+      if (e.key !== 'Escape' && !(e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing)) return
       // Keeps the board from also handling this Escape as "back to projects".
       e.preventDefault()
       close()

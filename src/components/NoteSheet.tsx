@@ -123,7 +123,8 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      // Escape, or Ctrl / ⌘ + Enter from the text.
+      if (e.key !== 'Escape' && !(e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing)) return
       e.preventDefault()
       close()
     }

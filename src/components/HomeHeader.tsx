@@ -14,7 +14,7 @@ const TABS: { id: Tab; label: string; href: string }[] = [
   { id: 'notes', label: 'Notes', href: '#/notes' },
 ]
 
-/** Header of the two home pages: Projects / Notes switch (also ← / →), theme and sign out. */
+/** Header of the two home pages: Projects / Notes switch (also ← / → and Tab), theme and sign out. */
 export function HomeHeader({ current, keys = true }: { current: Tab; keys?: boolean }) {
   const theme = useTheme()
 
@@ -22,8 +22,11 @@ export function HomeHeader({ current, keys = true }: { current: Tab; keys?: bool
     if (!keys) return
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]')
-      if (typing || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.isComposing) return
-      const target = e.key === 'ArrowLeft' ? 'projects' : e.key === 'ArrowRight' ? 'notes' : null
+      if (typing || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return
+      // Tab (or Shift + Tab) flips to the other page, outside text fields where it still moves the focus.
+      const other = current === 'projects' ? 'notes' : 'projects'
+      const target =
+        e.key === 'Tab' ? other : e.shiftKey ? null : e.key === 'ArrowLeft' ? 'projects' : e.key === 'ArrowRight' ? 'notes' : null
       if (!target || target === current) return
       e.preventDefault()
       navigate({ name: target })

@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { KeyboardIcon } from './icons'
 
 const SECTIONS: { title: string; keys: [string, string][] }[] = [
   {
     title: 'Projects',
     keys: [
       ['← →', 'Projects / Notes'],
+      ['Tab', 'Projects / Notes'],
       ['↑ ↓', 'Select a project'],
       ['Letters', 'Jump to a project by name'],
       ['Enter', 'Open'],
@@ -18,6 +20,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
       ['/', 'Search'],
       ['Letter', 'New note'],
       ['Esc', 'Close'],
+      ['Ctrl ↵', 'Close'],
     ],
   },
   {
@@ -38,43 +41,65 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
       ['Alt ↑ ↓', 'Previous / next issue'],
       ['Alt ← →', 'Change the status'],
       ['Esc', 'Close'],
+      ['Ctrl ↵', 'Close'],
     ],
   },
 ]
 
-/** Discreet keyboard cheat sheet for the home pages, toggled by its link or "?". */
+/** Keyboard cheat sheet for the home pages: a button pinned bottom right opens it as a card, so does "?". */
 export function ShortcutsHelp() {
   const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]')
       if (!typing && e.key === '?') setOpen((v) => !v)
+      // Capture phase: this Escape closes the card and stops there, the page does not go back.
+      else if (open && e.key === 'Escape') {
+        e.preventDefault()
+        setOpen(false)
+      }
     }
-    addEventListener('keydown', onKey)
-    return () => removeEventListener('keydown', onKey)
-  }, [])
+    addEventListener('keydown', onKey, true)
+    return () => removeEventListener('keydown', onKey, true)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false)
+    }
+    addEventListener('pointerdown', onDown)
+    return () => removeEventListener('pointerdown', onDown)
+  }, [open])
 
   return (
-    <div className="mt-10 text-xs text-neutral-400">
-      <button onClick={() => setOpen((v) => !v)} className="hover:text-neutral-600 dark:hover:text-neutral-300">
-        Keyboard shortcuts <kbd className="ml-1 font-sans">?</kbd>
-      </button>
+    <div ref={box} className="fixed right-6 bottom-6 z-30 flex flex-col items-end gap-3">
       {open && (
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+        <div className="grid w-[34rem] max-w-[calc(100vw-3rem)] animate-sheet grid-cols-2 gap-x-8 gap-y-5 rounded-2xl bg-white p-5 text-[13px] shadow-2xl ring-1 ring-neutral-200/70 dark:bg-neutral-900 dark:ring-neutral-800">
           {SECTIONS.map(({ title, keys }) => (
             <dl key={title}>
-              <dt className="mb-1.5 font-medium text-neutral-500">{title}</dt>
+              <dt className="mb-2 text-xs font-semibold tracking-wide text-neutral-400 uppercase">{title}</dt>
               {keys.map(([key, label]) => (
-                <dd key={key + label} className="flex gap-2 py-0.5">
-                  <kbd className="w-16 shrink-0 font-sans text-neutral-500">{key}</kbd>
-                  <span>{label}</span>
+                <dd key={key + label} className="flex items-baseline gap-3 py-0.5">
+                  <kbd className="w-20 shrink-0 font-sans font-medium text-neutral-700 dark:text-neutral-200">{key}</kbd>
+                  <span className="text-neutral-500 dark:text-neutral-400">{label}</span>
                 </dd>
               ))}
             </dl>
           ))}
         </div>
       )}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-sm text-neutral-600 shadow-md ring-1 ring-neutral-200/70 transition hover:text-neutral-900 dark:bg-neutral-900 dark:text-neutral-300 dark:ring-neutral-800 dark:hover:text-white"
+      >
+        <KeyboardIcon width={18} height={18} />
+        Shortcuts
+        <kbd className="rounded bg-neutral-100 px-1.5 font-sans text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">?</kbd>
+      </button>
     </div>
   )
 }
