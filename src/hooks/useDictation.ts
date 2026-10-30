@@ -13,7 +13,7 @@ const preferredType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find
   typeof MediaRecorder !== 'undefined' ? MediaRecorder.isTypeSupported(t) : false,
 )
 
-async function askKey() {
+export async function askKey() {
   const key = prompt('Groq API key (console.groq.com/keys), saved to your account:')?.trim()
   if (!key) return false
   try {

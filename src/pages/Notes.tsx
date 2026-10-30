@@ -8,6 +8,7 @@ import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { HomeHeader } from '../components/HomeHeader'
 import { AutoTextarea } from '../components/AutoTextarea'
 import { DictationButton } from '../components/DictationButton'
+import { PostProcessButton } from '../components/PostProcessButton'
 import { NoteSheet } from '../components/NoteSheet'
 import { ShortcutsHelp } from '../components/ShortcutsHelp'
 import { NoteSearchPalette } from '../components/SearchPalette'
@@ -99,7 +100,9 @@ export function Notes() {
           />
           {desktop && dictationSupported && (
             <div className="pb-1">
-              <DictationButton dictation={dictation} label="Dictate a note" meter={false} />
+              <DictationButton dictation={dictation} label="Dictate a note" meter={false}>
+                <PostProcessButton text={draft} onResult={setDraft} />
+              </DictationButton>
             </div>
           )}
           <button

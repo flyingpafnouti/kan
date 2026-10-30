@@ -6,6 +6,7 @@ import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
 import { MarkdownField } from './Markdown'
 import { DictationButton } from './DictationButton'
+import { PostProcessButton } from './PostProcessButton'
 import { GripIcon } from './icons'
 
 interface Props {
@@ -160,7 +161,11 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
             <p className="text-xs text-neutral-400">
               {dictation.state === 'transcribing' ? 'Transcribing…' : `Edited ${formatDate(note.updated_at)}`}
             </p>
-            {dictationSupported && <DictationButton dictation={dictation} label="Dictate" />}
+            {dictationSupported && (
+              <DictationButton dictation={dictation} label="Dictate">
+                <PostProcessButton text={body} onResult={setBody} />
+              </DictationButton>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">

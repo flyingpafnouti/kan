@@ -7,6 +7,7 @@ import { StatusIcon } from './StatusIcon'
 import { AutoTextarea } from './AutoTextarea'
 import { MarkdownField } from './Markdown'
 import { DictationButton } from './DictationButton'
+import { PostProcessButton } from './PostProcessButton'
 import { ChevronIcon } from './icons'
 
 interface Props {
@@ -167,7 +168,17 @@ export function IssueSheet({
             <p className="text-xs text-neutral-400">
               {dictation.state === 'transcribing' ? 'Transcribing…' : `Edited ${formatDate(issue.updated_at)}`}
             </p>
-            {dictationSupported && <DictationButton dictation={dictation} label="Dictate notes" />}
+            {dictationSupported && (
+              <DictationButton dictation={dictation} label="Dictate notes">
+                <PostProcessButton
+                  text={body}
+                  onResult={(b) => {
+                    setBody(b)
+                    schedule(title, b)
+                  }}
+                />
+              </DictationButton>
+            )}
           </div>
         </div>
         <div className="space-y-3 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">

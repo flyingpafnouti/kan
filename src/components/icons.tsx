@@ -58,6 +58,12 @@ export const MicIcon = (p: P) => (
   </svg>
 )
 
+export const SparkleIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="m11 4 1.8 5.2L18 11l-5.2 1.8L11 18l-1.8-5.2L4 11l5.2-1.8L11 4ZM19 16v4M17 18h4" />
+  </svg>
+)
+
 export const StopIcon = (p: P) => (
   <svg {...base} {...p}>
     <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" />
