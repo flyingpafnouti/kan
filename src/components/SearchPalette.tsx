@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { PRIORITIES, type Issue, type Note } from '../lib/types'
+import { NOTE_KINDS, PRIORITIES, type Issue, type Note } from '../lib/types'
 import { search } from '../lib/fuzzy'
 import { issueFromNote } from '../hooks/useNotes'
 import { useScrollLock } from '../hooks/useScrollLock'
@@ -41,7 +41,10 @@ export function SearchPalette({
   )
 }
 
-/** Fuzzy search over the notes, opened with "/". The first sentence plays the title, as when a note becomes an issue. */
+/**
+ * Fuzzy search over the notes, opened with "/". The first sentence plays the title, as when a note becomes an issue,
+ * and each hit tells its type.
+ */
 export function NoteSearchPalette({
   notes,
   onPick,
@@ -52,7 +55,19 @@ export function NoteSearchPalette({
   onClose: () => void
 }) {
   const items = useMemo(() => notes.map((note) => ({ ...note, ...issueFromNote(note.body), note })), [notes])
-  return <Palette items={items} noun="note" onPick={(item) => onPick(item.note)} onClose={onClose} />
+  return (
+    <Palette
+      items={items}
+      noun="note"
+      onPick={(item) => onPick(item.note)}
+      onClose={onClose}
+      badge={(item) => (
+        <span className="mt-0.5 shrink-0 text-xs text-neutral-400">
+          {NOTE_KINDS.find((k) => k.id === (item.kind ?? 'pro'))?.label}
+        </span>
+      )}
+    />
+  )
 }
 
 interface Searchable {

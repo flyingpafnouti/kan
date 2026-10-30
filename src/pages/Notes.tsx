@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { navigate } from '../lib/router'
 import { toast } from '../lib/toast'
+import type { NoteKind } from '../lib/types'
 import { useNotes } from '../hooks/useNotes'
 import { useProjectList } from '../hooks/useProjects'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -8,6 +9,7 @@ import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { HomeHeader } from '../components/HomeHeader'
 import { AutoTextarea } from '../components/AutoTextarea'
 import { DictationButton } from '../components/DictationButton'
+import { KindSwitch } from '../components/KindSwitch'
 import { PostProcessButton } from '../components/PostProcessButton'
 import { NoteSheet } from '../components/NoteSheet'
 import { ShortcutsHelp } from '../components/ShortcutsHelp'
@@ -17,12 +19,41 @@ import { MicIcon, SendIcon, StopIcon } from '../components/icons'
 
 const SHORT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
+const VIEW_KEY = 'notes-view'
+
+/** Type of notes shown, kept on this device. */
+function storedView(): NoteKind {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'perso' ? 'perso' : 'pro'
+  } catch {
+    return 'pro'
+  }
+}
+
+function storeView(kind: NoteKind) {
+  try {
+    localStorage.setItem(VIEW_KEY, kind)
+  } catch {
+    /* storage unavailable: the choice lasts until the page closes */
+  }
+}
+
 /**
  * Loose ideas, newest first. Typed in the field on top, or dictated: each transcript becomes its own note.
- * A note can then be turned into an issue of a project.
+ * A note can then be turned into an issue of a project. The page shows one type of note, pro or perso, and new
+ * notes take that type.
  */
 export function Notes() {
-  const { notes, add, update, remove, toIssue } = useNotes()
+  const { notes: all, add, update, setKind, remove, toIssue } = useNotes()
+  const [view, setView] = useState(storedView)
+  // Notes from before the kind column, still in the cache, have none: they are pro.
+  const notes = useMemo(() => all && all.filter((n) => (n.kind ?? 'pro') === view), [all, view])
+
+  function show(kind: NoteKind) {
+    setView(kind)
+    storeView(kind)
+  }
+
   const projects = useProjectList()
   const desktop = useMediaQuery('(pointer: fine)')
   const [draft, setDraft] = useState('')
@@ -30,7 +61,7 @@ export function Notes() {
   const [selected, setSelected] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
   const composer = useRef<HTMLTextAreaElement>(null)
-  const dictation = useDictation(add)
+  const dictation = useDictation((text) => add(text, view))
   const recording = dictation.state === 'recording'
 
   // ↑ / ↓ select a note, Enter opens it, "/" searches, any other printable key starts a new one; Escape or Backspace go back.
@@ -50,7 +81,7 @@ export function Notes() {
         e.preventDefault()
         if (i >= 0) setSelected(null)
         else navigate({ name: 'projects' })
-      } else if (e.key === '/' && notes?.length) {
+      } else if (e.key === '/' && all?.length) {
         e.preventDefault()
         setSearching(true)
       } else if (e.key.length === 1 && e.key !== ' ' && e.key !== '?') {
@@ -60,7 +91,7 @@ export function Notes() {
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
-  }, [notes, selected, openId, searching])
+  }, [all, notes, selected, openId, searching])
 
   useEffect(() => {
     if (selected) document.querySelector(`[data-nav-id="${selected}"]`)?.scrollIntoView({ block: 'nearest' })
@@ -69,11 +100,12 @@ export function Notes() {
   function submit(e?: FormEvent) {
     e?.preventDefault()
     const t = draft.trim()
-    if (t) add(t)
+    if (t) add(t, view)
     setDraft('')
   }
 
-  const open = openId ? notes?.find((n) => n.id === openId) : undefined
+  // Looked up among all the notes: one moved to the other type stays open.
+  const open = openId ? all?.find((n) => n.id === openId) : undefined
 
   return (
     <main className={`mx-auto min-h-dvh max-w-xl px-4 pt-safe ${desktop ? 'pb-safe' : 'pb-28'}`}>
@@ -113,6 +145,12 @@ export function Notes() {
             <SendIcon width={18} height={18} />
           </button>
         </form>
+      )}
+
+      {notes && (
+        <div className="mb-2 flex justify-end">
+          <KindSwitch value={view} onChange={show} />
+        </div>
       )}
 
       <ul className="space-y-2">
@@ -173,11 +211,13 @@ export function Notes() {
 
       {desktop && notes && <ShortcutsHelp />}
 
-      {searching && notes && (
+      {/* Over all the notes: a hit of the other type brings its list along, ready behind the sheet. */}
+      {searching && all && (
         <NoteSearchPalette
-          notes={notes}
+          notes={all}
           onPick={(note) => {
             setSearching(false)
+            show(note.kind ?? 'pro')
             setSelected(note.id)
             setOpenId(note.id)
           }}
@@ -191,6 +231,7 @@ export function Notes() {
           note={open}
           projects={projects}
           onSave={(body) => update(open.id, body)}
+          onKind={(kind) => setKind(open.id, kind)}
           onDelete={() => {
             remove(open)
             setOpenId(null)

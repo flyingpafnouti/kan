@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { hasSession, supabase } from '../lib/supabase'
-import type { Issue, Note } from '../lib/types'
+import type { Issue, Note, NoteKind } from '../lib/types'
 import { uuid } from '../lib/id'
 import { toast } from '../lib/toast'
 import { readCache, writeCache } from '../lib/cache'
@@ -9,7 +9,7 @@ import { enqueue, onReject, overlay, overlayRow } from '../lib/outbox'
 import { reloadOnRejoin, useRefetchOnFocus } from './useRefetchOnFocus'
 import { topOfTodo } from './useIssues'
 
-const COLUMNS = 'id, body, created_at, updated_at'
+const COLUMNS = 'id, body, kind, created_at, updated_at'
 
 /**
  * Issue drafted from a note: the first line, or the first sentence of a dictated paragraph, becomes the title
@@ -77,9 +77,9 @@ export function useNotes() {
 
   const notes = useMemo(() => list && [...list].sort((a, b) => b.created_at.localeCompare(a.created_at)), [list])
 
-  const add = useCallback((body: string) => {
+  const add = useCallback((body: string, kind: NoteKind) => {
     const now = new Date().toISOString()
-    const row: Note = { id: uuid(), body, created_at: now, updated_at: now }
+    const row: Note = { id: uuid(), body, kind, created_at: now, updated_at: now }
     setList((l) => [...(l ?? []), row])
     enqueue({ table: 'notes', id: row.id, kind: 'upsert', data: { ...row } })
   }, [])
@@ -88,6 +88,12 @@ export function useNotes() {
     const updated_at = new Date().toISOString()
     setList((l) => l?.map((x) => (x.id === id ? { ...x, body, updated_at } : x)) ?? null)
     enqueue({ table: 'notes', id, kind: 'update', data: { body } })
+  }, [])
+
+  const setKind = useCallback((id: string, kind: NoteKind) => {
+    const updated_at = new Date().toISOString()
+    setList((l) => l?.map((x) => (x.id === id ? { ...x, kind, updated_at } : x)) ?? null)
+    enqueue({ table: 'notes', id, kind: 'update', data: { kind } })
   }, [])
 
   const drop = useCallback((id: string) => {
@@ -129,5 +135,5 @@ export function useNotes() {
     [drop],
   )
 
-  return { notes, add, update, remove, toIssue }
+  return { notes, add, update, setKind, remove, toIssue }
 }

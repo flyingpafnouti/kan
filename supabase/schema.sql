@@ -39,6 +39,7 @@ create table public.notes (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null default auth.uid() references auth.users on delete cascade,
   body       text not null check (char_length(body) between 1 and 20000),
+  kind       text not null default 'pro' check (kind in ('pro', 'perso')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

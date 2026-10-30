@@ -65,9 +65,17 @@ export interface Issue {
 }
 
 /** Loose idea, not tied to a project; can become an issue. */
+export type NoteKind = 'pro' | 'perso'
+
+export const NOTE_KINDS: { id: NoteKind; label: string }[] = [
+  { id: 'pro', label: 'Pro' },
+  { id: 'perso', label: 'Perso' },
+]
+
 export interface Note {
   id: string
   body: string
+  kind: NoteKind
   created_at: string
   updated_at: string
 }

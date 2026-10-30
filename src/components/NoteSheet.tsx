@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
-import type { Note, Project } from '../lib/types'
+import type { Note, NoteKind, Project } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useScrollLock } from '../hooks/useScrollLock'
@@ -8,11 +8,13 @@ import { MarkdownField } from './Markdown'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
 import { GripIcon } from './icons'
+import { KindSwitch } from './KindSwitch'
 
 interface Props {
   note: Note
   projects: Project[] | null
   onSave: (body: string) => void
+  onKind: (kind: NoteKind) => void
   onDelete: () => void
   /** Turns the note, with its latest text, into an issue of that project. */
   onToIssue: (projectId: string, body: string) => void
@@ -46,7 +48,7 @@ function storeSize(s: Size | null) {
   }
 }
 
-export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose }: Props) {
+export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue, onClose }: Props) {
   const [body, setBody] = useState(note.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const saved = useRef(note.body)
@@ -179,6 +181,7 @@ export function NoteSheet({ note, projects, onSave, onDelete, onToIssue, onClose
           >
             {confirmDelete ? 'Confirm deletion' : 'Delete'}
           </button>
+          <KindSwitch value={note.kind ?? 'pro'} onChange={onKind} />
           {projects && projects.length > 0 && (
             <select
               value=""
