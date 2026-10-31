@@ -1,9 +1,6 @@
 import { useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import { navigate, rememberProject } from '../lib/router'
-import { clear as clearOutbox, pendingCount } from '../lib/outbox'
-import { clearCache } from '../lib/cache'
-import { clearImages } from '../lib/images'
+import { navigate } from '../lib/router'
+import { signOut } from '../lib/signOut'
 import { toggleTheme, useTheme } from '../lib/theme'
 import { SyncBadge } from './SyncBadge'
 import { MoonIcon, SunIcon } from './icons'
@@ -35,16 +32,6 @@ export function HomeHeader({ current, keys = true }: { current: Tab; keys?: bool
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
   }, [current, keys])
-
-  async function signOut() {
-    const n = pendingCount()
-    if (n && !confirm(`${n} unsynced change(s) will be lost. Sign out?`)) return
-    await supabase.auth.signOut()
-    clearOutbox()
-    clearCache()
-    await clearImages()
-    rememberProject(null)
-  }
 
   return (
     <header className="flex items-center justify-between py-5">

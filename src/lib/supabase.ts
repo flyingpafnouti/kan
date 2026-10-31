@@ -19,6 +19,14 @@ export function hasStoredSession() {
   }
 }
 
+export function storedAccessToken(): string | null {
+  try {
+    return JSON.parse(localStorage.getItem(storageKey) ?? 'null')?.access_token ?? null
+  } catch {
+    return null
+  }
+}
+
 /** False while the session cannot be confirmed (offline with an expired token): requests would go out anonymously. */
 export async function hasSession() {
   const { data } = await supabase.auth.getSession()

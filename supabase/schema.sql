@@ -99,6 +99,21 @@ end $$;
 create trigger issues_done_at before insert or update on public.issues
 for each row execute function public.set_done_at();
 
+-- True for unflagged accounts; flagged ones need a TOTP code less than 91 days old. The app asks for one after 90 days:
+-- the extra day keeps an open tab from seeing empty lists before it notices.
+create function public.mfa_satisfied() returns boolean
+language sql stable as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'mfa_required')::boolean, false) is not true
+    or (
+      auth.jwt() ->> 'aal' = 'aal2'
+      and exists (
+        select 1 from jsonb_array_elements(coalesce(auth.jwt() -> 'amr', '[]')) as entry
+        where entry ->> 'method' = 'totp'
+          and (entry ->> 'timestamp')::bigint > extract(epoch from now() - interval '91 days')
+      )
+    )
+$$;
+
 -- Security definer so policies on projects and issues can check membership without recursing into RLS.
 create function public.is_member(pid uuid) returns boolean
 language sql stable security definer set search_path = public as $$
@@ -120,6 +135,9 @@ language plpgsql security definer set search_path = public as $$
 declare
   pid uuid;
 begin
+  if not public.mfa_satisfied() then
+    raise exception 'mfa required' using errcode = '42501';
+  end if;
   select id into pid from projects where invite_token = token;
   if pid is null then
     raise exception 'invalid invite' using errcode = 'P0002';
@@ -132,6 +150,9 @@ end $$;
 create function public.leave_project(pid uuid) returns void
 language plpgsql security definer set search_path = public as $$
 begin
+  if not public.mfa_satisfied() then
+    raise exception 'mfa required' using errcode = '42501';
+  end if;
   delete from project_members where project_id = pid and user_id = auth.uid();
   if not found then
     return;
@@ -186,3 +207,24 @@ create policy "read own note images" on storage.objects
 create policy "add own note images" on storage.objects
   for insert to authenticated
   with check (bucket_id = 'note-images' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+create policy "mfa satisfied" on public.projects as restrictive
+  for all to authenticated
+  using ((select public.mfa_satisfied())) with check ((select public.mfa_satisfied()));
+
+create policy "mfa satisfied" on public.project_members as restrictive
+  for all to authenticated
+  using ((select public.mfa_satisfied())) with check ((select public.mfa_satisfied()));
+
+create policy "mfa satisfied" on public.issues as restrictive
+  for all to authenticated
+  using ((select public.mfa_satisfied())) with check ((select public.mfa_satisfied()));
+
+create policy "mfa satisfied" on public.notes as restrictive
+  for all to authenticated
+  using ((select public.mfa_satisfied())) with check ((select public.mfa_satisfied()));
+
+create policy "mfa satisfied" on storage.objects as restrictive
+  for all to authenticated
+  using (bucket_id <> 'note-images' or (select public.mfa_satisfied()))
+  with check (bucket_id <> 'note-images' or (select public.mfa_satisfied()));

@@ -1,3 +1,4 @@
+import { mfaPending } from './mfa'
 import { hasSession, supabase } from './supabase'
 import { toast } from './toast'
 
@@ -121,7 +122,8 @@ const retryable = (status: number) => status === 0 || status === 401 || status =
 export async function flush() {
   if (inflight || !ops.length) return
   clearTimeout(retryTimer)
-  while (ops.length) {
+  // While a code is due the policies ignore updates without an error, which would lose them: wait for the verification.
+  while (ops.length && !mfaPending()) {
     const op = (inflight = ops[0])
     const { error, status } = (await hasSession()) ? await run(op) : { error: true, status: 0 }
     inflight = null
@@ -141,5 +143,5 @@ export async function flush() {
 addEventListener('online', () => flush())
 document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && flush())
 supabase.auth.onAuthStateChange((event) => {
-  if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') flush()
+  if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'MFA_CHALLENGE_VERIFIED') flush()
 })
