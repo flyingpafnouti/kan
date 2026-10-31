@@ -5,6 +5,7 @@ import { imagePath, readyImageUrl } from './images'
  * Markdown for the issue and note bodies. Raw HTML is escaped, so the output is safe to inject.
  * Math is kept verbatim in .math elements and typeset afterwards by src/lib/mathjax.ts:
  * $…$ and \(…\) inline, $$…$$ and \[…\] displayed.
+ * ```mermaid fences are kept the same way for src/lib/mermaid.ts, in the views that show diagrams.
  */
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
@@ -80,6 +81,27 @@ md.renderer.rules.math_inline = (tokens, i) =>
 md.renderer.rules.math_block = (tokens, i) =>
   `<div class="math math-display" data-line="${tokens[i].map![0]}">${escape(tokens[i].content)}</div>\n`
 
+/** hidden: a label stands for the diagram (note list). editable: it gets a button to its source. */
+export type DiagramMode = 'hidden' | 'shown' | 'editable'
+
+const PENCIL =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>'
+
+const fence = md.renderer.rules.fence!
+md.renderer.rules.fence = (tokens, i, options, env, self) => {
+  const token = tokens[i]
+  if (token.info.trim().split(/\s+/)[0] !== 'mermaid') return fence(tokens, i, options, env, self)
+  const line = `data-line="${token.map![0]}"`
+  const { diagrams } = env as { diagrams: DiagramMode }
+  if (diagrams === 'hidden') return `<div class="mermaid-placeholder" ${line}>Diagram</div>\n`
+  const edit =
+    diagrams === 'editable'
+      ? `<button type="button" class="mermaid-edit" title="Edit diagram" aria-label="Edit diagram">${PENCIL}</button>`
+      : ''
+  return `<div class="mermaid-block" ${line}><div class="mermaid-diagram">${escape(token.content)}</div>${edit}</div>\n`
+}
+
 // Source line of each top-level block, so a click on the preview puts the caret on that line.
 md.core.ruler.push('source_line', (state) => {
   for (const token of state.tokens) {
@@ -109,6 +131,11 @@ md.renderer.rules.image = (tokens, i, options, env, self) => {
   )
 }
 
-export function renderMarkdown(src: string): string {
-  return md.render(src)
+/** Plain body for a card: each diagram's source gives way to a label. A fence left open runs to the end, as when rendered. */
+export function hideDiagrams(body: string): string {
+  return body.replace(/^[ \t]*(`{3,}|~{3,})[ \t]*mermaid\b.*(?:\n[\s\S]*?(?:^[ \t]*\1[`~]*[ \t]*$|$(?![\s\S]))|$)/gm, 'Diagram')
+}
+
+export function renderMarkdown(src: string, diagrams: DiagramMode): string {
+  return md.render(src, { diagrams })
 }

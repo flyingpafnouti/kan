@@ -40,6 +40,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
     title: 'Issue',
     keys: [
       ['Alt ↑ ↓', 'Previous / next issue'],
+      ['Alt E', 'Read / Edit'],
       ['Alt ← →', 'Change the status'],
       ['Esc', 'Close'],
       ['Ctrl ↵', 'Close'],

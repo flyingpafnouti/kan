@@ -3,9 +3,11 @@ import { PRIORITIES, STATUSES, type Issue, type Priority, type Project, type Sta
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
+import { setImageWidth } from '../lib/images'
 import { StatusIcon } from './StatusIcon'
 import { AutoTextarea } from './AutoTextarea'
-import { MarkdownField } from './Markdown'
+import { ResizableMarkdown } from './Markdown'
+import { ModeSwitch, type Mode } from './Switch'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
 import { ChevronIcon } from './icons'
@@ -46,6 +48,10 @@ export function IssueSheet({
   const [title, setTitle] = useState(issue.title)
   const [body, setBody] = useState(issue.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [mode, setMode] = useState<Mode>('edit')
+  const field = useRef<HTMLTextAreaElement>(null)
+  /** Where the caret goes on the way to Edit. Unset when the sheet opens: no keyboard popping up on a phone. */
+  const caret = useRef<number>(undefined)
   const saved = useRef({ title: issue.title, body: issue.body })
   const timer = useRef<number>(undefined)
 
@@ -81,8 +87,24 @@ export function IssueSheet({
     schedule(title, b)
   })
 
+  const changeMode = (next: Mode, at = body.length) => {
+    if (next === 'edit') caret.current = at
+    setMode(next)
+  }
+  useEffect(() => {
+    if (mode !== 'edit' || caret.current === undefined) return
+    field.current?.focus()
+    field.current?.setSelectionRange(caret.current, caret.current)
+    caret.current = undefined
+  }, [mode])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // By key position: Alt + E types a dead key on a Mac.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === 'KeyE') {
+        e.preventDefault()
+        return changeMode(mode === 'read' ? 'edit' : 'read')
+      }
       // Alt + ↑ / ↓ has no use in a text field on Linux and Windows, so it works with the cursor in the notes.
       if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.isComposing) {
         e.preventDefault()
@@ -149,36 +171,53 @@ export function IssueSheet({
               </div>
             )}
           </div>
-          <MarkdownField
-            value={body}
-            onChange={(v) => {
-              setBody(v)
-              schedule(title, v)
-            }}
-            className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"
-            placeholder={
-              dictation.state === 'recording'
-                ? 'Speak…'
-                : dictation.state === 'transcribing'
-                  ? 'Transcribing…'
-                  : 'Notes…'
-            }
-          />
+          {mode === 'read' && body.trim() ? (
+            <ResizableMarkdown
+              text={body}
+              className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"
+              onImageWidth={(path, width) => {
+                const b = setImageWidth(body, path, width)
+                setBody(b)
+                schedule(title, b)
+              }}
+              onEditLine={(line) => changeMode('edit', body.split('\n').slice(0, line).join('\n').length + (line ? 1 : 0))}
+            />
+          ) : (
+            <AutoTextarea
+              ref={field}
+              value={body}
+              onChange={(v) => {
+                setBody(v)
+                schedule(title, v)
+              }}
+              className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"
+              placeholder={
+                dictation.state === 'recording'
+                  ? 'Speak…'
+                  : dictation.state === 'transcribing'
+                    ? 'Transcribing…'
+                    : 'Notes…'
+              }
+            />
+          )}
           <div className="flex items-center justify-between gap-2 py-2">
             <p className="text-xs text-neutral-400">
               {dictation.state === 'transcribing' ? 'Transcribing…' : `Edited ${formatDate(issue.updated_at)}`}
             </p>
-            {dictationSupported && (
-              <DictationButton dictation={dictation} label="Dictate notes">
-                <PostProcessButton
-                  text={body}
-                  onResult={(b) => {
-                    setBody(b)
-                    schedule(title, b)
-                  }}
-                />
-              </DictationButton>
-            )}
+            <div className="flex items-center gap-2">
+              <ModeSwitch label="Issue mode" value={mode} onChange={(m) => changeMode(m)} />
+              {dictationSupported && (
+                <DictationButton dictation={dictation} label="Dictate notes">
+                  <PostProcessButton
+                    text={body}
+                    onResult={(b) => {
+                      setBody(b)
+                      schedule(title, b)
+                    }}
+                  />
+                </DictationButton>
+              )}
+            </div>
           </div>
         </div>
         <div className="space-y-3 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">

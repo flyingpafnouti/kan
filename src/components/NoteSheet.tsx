@@ -8,7 +8,7 @@ import { imageFiles, prepareImage, removeImageLink, setImageWidth } from '../lib
 import { toast } from '../lib/toast'
 import { ResizableMarkdown } from './Markdown'
 import { AutoTextarea } from './AutoTextarea'
-import { Switch } from './Switch'
+import { ModeSwitch, type Mode } from './Switch'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
 import { GripIcon } from './icons'
@@ -26,12 +26,6 @@ interface Props {
 }
 
 type Size = { w: number; h: number }
-type Mode = 'read' | 'edit'
-
-const MODES: { id: Mode; label: string }[] = [
-  { id: 'read', label: 'Read' },
-  { id: 'edit', label: 'Edit' },
-]
 
 const SIZE_KEY = 'note-size'
 const MIN_W = 320
@@ -266,9 +260,7 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
                   : `Edited ${formatDate(note.updated_at)}`}
             </p>
             <div className="flex items-center gap-2">
-              <div title="Alt + E" className="flex">
-                <Switch label="Note mode" options={MODES} value={mode} onChange={setMode} />
-              </div>
+              <ModeSwitch label="Note mode" value={mode} onChange={setMode} />
               {dictationSupported && (
                 <DictationButton dictation={dictation} label="Dictate">
                   <PostProcessButton text={body} onResult={setBody} />

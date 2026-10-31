@@ -11,11 +11,12 @@ export default defineConfig({
   build: {
     rolldownOptions: {
       output: {
-        // MathJax and its glyph ranges (~10 MB) go apart, out of the precache: see runtimeCaching below.
+        // Only two things load lazily, and both go apart, out of the precache (see runtimeCaching below):
+        // MathJax with its glyph ranges (~10 MB), and Mermaid with its diagram types (~6 MB).
         chunkFileNames: (chunk) =>
           chunk.moduleIds.some((id) => id.includes('/node_modules/@mathjax/'))
             ? 'assets/mathjax/[name]-[hash].js'
-            : 'assets/[name]-[hash].js',
+            : 'assets/mermaid/[name]-[hash].js',
       },
     },
   },
@@ -26,13 +27,18 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon.svg'],
       workbox: {
-        globIgnores: ['assets/mathjax/**'],
+        globIgnores: ['assets/mathjax/**', 'assets/mermaid/**'],
         // Hashed names never change: cached at first use, math then renders offline.
         runtimeCaching: [
           {
             urlPattern: /\/assets\/mathjax\//,
             handler: 'CacheFirst',
             options: { cacheName: 'mathjax', expiration: { maxEntries: 100 } },
+          },
+          {
+            urlPattern: /\/assets\/mermaid\//,
+            handler: 'CacheFirst',
+            options: { cacheName: 'mermaid', expiration: { maxEntries: 300 } },
           },
         ],
       },

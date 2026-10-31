@@ -2,6 +2,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { PRIORITIES, type Issue, type Status } from '../lib/types'
 import { StatusIcon } from './StatusIcon'
+import { hideDiagrams } from '../lib/format'
 
 const NEXT: Record<Status, Status> = { todo: 'doing', doing: 'done', done: 'todo' }
 
@@ -41,7 +42,7 @@ export function IssueCard({ issue, onOpen, onStatus, overlay, project, selected 
         <p className={`text-[15px] leading-snug break-words ${done ? 'text-neutral-400 line-through' : ''}`}>
           {issue.title}
         </p>
-        {issue.body && <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{issue.body}</p>}
+        {issue.body && <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{hideDiagrams(issue.body)}</p>}
         {project && <p className="mt-1.5 truncate text-xs font-medium text-accent/80">{project}</p>}
       </button>
     </div>

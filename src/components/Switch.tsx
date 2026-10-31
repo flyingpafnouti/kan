@@ -1,3 +1,19 @@
+export type Mode = 'read' | 'edit'
+
+const MODES: { id: Mode; label: string }[] = [
+  { id: 'read', label: 'Read' },
+  { id: 'edit', label: 'Edit' },
+]
+
+/** Read / Edit of a note or an issue. */
+export function ModeSwitch({ label, value, onChange }: { label: string; value: Mode; onChange: (mode: Mode) => void }) {
+  return (
+    <div title="Alt + E" className="flex">
+      <Switch label={label} options={MODES} value={value} onChange={onChange} />
+    </div>
+  )
+}
+
 /** Small two-way switch, discreet enough to sit beside a note. */
 export function Switch<T extends string>({
   label,
