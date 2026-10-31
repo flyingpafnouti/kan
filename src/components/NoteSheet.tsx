@@ -4,7 +4,11 @@ import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
-import { MarkdownField } from './Markdown'
+import { imageFiles, prepareImage, removeImageLink, setImageWidth } from '../lib/images'
+import { toast } from '../lib/toast'
+import { ResizableMarkdown } from './Markdown'
+import { AutoTextarea } from './AutoTextarea'
+import { Switch } from './Switch'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
 import { GripIcon } from './icons'
@@ -22,6 +26,12 @@ interface Props {
 }
 
 type Size = { w: number; h: number }
+type Mode = 'read' | 'edit'
+
+const MODES: { id: Mode; label: string }[] = [
+  { id: 'read', label: 'Read' },
+  { id: 'edit', label: 'Edit' },
+]
 
 const SIZE_KEY = 'note-size'
 const MIN_W = 320
@@ -61,11 +71,17 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
   const [size, setSize] = useState(storedSize)
   const panel = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number } & Size>(undefined)
+  const [uploading, setUploading] = useState(0)
+  const [mode, setMode] = useState<Mode>('read')
+  const field = useRef<HTMLTextAreaElement>(null)
+  /** Links of the images on their way to the server. */
+  const pending = useRef(new Set<string>())
 
   // Saved once, on close, rather than while typing. An emptied note is not saved (the server refuses it)
   // and goes away on close.
+  // An image still uploading is left out: its link only goes to the server once the file is there.
   const flush = () => {
-    const b = latest.current
+    const b = [...pending.current].reduce(removeImageLink, latest.current)
     if (ended.current || !b.trim() || b === saved.current) return
     saved.current = b
     onSave(b)
@@ -74,6 +90,7 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
     ended.current = true
   }
   const close = () => {
+    if (uploading) return toast('Image still uploading')
     if (!body.trim()) {
       end()
       return onDelete()
@@ -97,6 +114,60 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
 
   const dictation = useDictation((text) => {
     setBody(body.trim() ? `${body.trimEnd()}${body.endsWith('\n') ? '' : ' '}${text}` : text)
+  })
+
+  /** At the caret when the text is being edited, at the end otherwise, on its own paragraph. */
+  const insertImage = (link: string) => {
+    const area = field.current
+    const text = latest.current
+    const at = area && document.activeElement === area ? area.selectionStart : text.length
+    const before = text.slice(0, at)
+    const after = text.slice(at)
+    const head = `${before}${before && !before.endsWith('\n') ? '\n\n' : ''}${link}`
+    setBody(`${head}${after && !after.startsWith('\n') ? '\n\n' : ''}${after}`)
+    requestAnimationFrame(() => area?.setSelectionRange(head.length, head.length))
+  }
+
+  const attachImage = async (file: File) => {
+    if (!navigator.onLine) return toast('Images need a connection')
+    setUploading((n) => n + 1)
+    let link: string | undefined
+    try {
+      const image = await prepareImage(file)
+      link = image.link
+      pending.current.add(link)
+      insertImage(link)
+      await image.send()
+    } catch (e) {
+      console.warn(e)
+      if (link) setBody((b) => removeImageLink(b, link!))
+      toast('Could not add the image')
+    } finally {
+      if (link) pending.current.delete(link)
+      setUploading((n) => n - 1)
+    }
+  }
+  const attachImages = async (files: File[]) => {
+    for (const file of files) await attachImage(file)
+  }
+
+  useEffect(() => {
+    if (mode !== 'edit') return
+    field.current?.focus()
+    field.current?.setSelectionRange(body.length, body.length)
+  }, [mode])
+
+  // On the document: nothing has the focus when the sheet just opened on a rendered note.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = imageFiles(e.clipboardData)
+      // Word and Excel also copy a picture of the text: the text is what was meant.
+      if (!files.length || e.clipboardData?.getData('text/plain').trim()) return
+      e.preventDefault()
+      void attachImages(files)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
   })
 
   // The panel is centered: it grows on both sides, hence twice the pointer move to keep the corner under it.
@@ -128,6 +199,11 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // By key position: Alt + E types a dead key on a Mac.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === 'KeyE') {
+        e.preventDefault()
+        return setMode((m) => (m === 'read' ? 'edit' : 'read'))
+      }
       // Escape, or Ctrl / ⌘ + Enter from the text.
       if (e.key !== 'Escape' && !(e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing)) return
       e.preventDefault()
@@ -142,6 +218,15 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
       <div className="absolute inset-0 animate-fade bg-black/40" onClick={close} />
       <div
         ref={panel}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+        }}
+        onDrop={(e) => {
+          const files = imageFiles(e.dataTransfer)
+          if (!files.length) return
+          e.preventDefault()
+          void attachImages(files)
+        }}
         style={
           desktop && size
             ? { width: size.w, height: size.h, maxWidth: `calc(100vw - ${GUTTER}px)`, maxHeight: `calc(100dvh - ${GUTTER}px)` }
@@ -151,23 +236,45 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300 md:hidden dark:bg-neutral-700" />
         <div className="flex-1 overflow-y-auto px-5 pt-4">
-          <MarkdownField
-            value={body}
-            onChange={setBody}
-            className="min-h-32 text-[15px] leading-relaxed"
-            placeholder={
-              dictation.state === 'recording' ? 'Speak…' : dictation.state === 'transcribing' ? 'Transcribing…' : 'Idea…'
-            }
-          />
+          {mode === 'read' && body.trim() ? (
+            <ResizableMarkdown
+              text={body}
+              className="min-h-32 text-[15px] leading-relaxed"
+              // The link changes with the width: not while the upload still expects it.
+              onImageWidth={(path, width) => {
+                if (uploading) return toast('Image still uploading')
+                setBody((b) => setImageWidth(b, path, width))
+              }}
+            />
+          ) : (
+            <AutoTextarea
+              ref={field}
+              value={body}
+              onChange={setBody}
+              className="min-h-32 text-[15px] leading-relaxed"
+              placeholder={
+                dictation.state === 'recording' ? 'Speak…' : dictation.state === 'transcribing' ? 'Transcribing…' : 'Idea…'
+              }
+            />
+          )}
           <div className="flex items-center justify-between gap-2 py-2">
             <p className="text-xs text-neutral-400">
-              {dictation.state === 'transcribing' ? 'Transcribing…' : `Edited ${formatDate(note.updated_at)}`}
+              {uploading
+                ? 'Uploading image…'
+                : dictation.state === 'transcribing'
+                  ? 'Transcribing…'
+                  : `Edited ${formatDate(note.updated_at)}`}
             </p>
-            {dictationSupported && (
-              <DictationButton dictation={dictation} label="Dictate">
-                <PostProcessButton text={body} onResult={setBody} />
-              </DictationButton>
-            )}
+            <div className="flex items-center gap-2">
+              <div title="Alt + E" className="flex">
+                <Switch label="Note mode" options={MODES} value={mode} onChange={setMode} />
+              </div>
+              {dictationSupported && (
+                <DictationButton dictation={dictation} label="Dictate">
+                  <PostProcessButton text={body} onResult={setBody} />
+                </DictationButton>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
@@ -185,7 +292,7 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
           {projects && projects.length > 0 && (
             <select
               value=""
-              disabled={!body.trim()}
+              disabled={!body.trim() || uploading > 0}
               onChange={(e) => {
                 end()
                 onToIssue(e.target.value, body)

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { navigate, rememberProject } from '../lib/router'
 import { clear as clearOutbox, pendingCount } from '../lib/outbox'
 import { clearCache } from '../lib/cache'
+import { clearImages } from '../lib/images'
 import { toggleTheme, useTheme } from '../lib/theme'
 import { SyncBadge } from './SyncBadge'
 import { MoonIcon, SunIcon } from './icons'
@@ -41,6 +42,7 @@ export function HomeHeader({ current, keys = true }: { current: Tab; keys?: bool
     await supabase.auth.signOut()
     clearOutbox()
     clearCache()
+    await clearImages()
     rememberProject(null)
   }
 

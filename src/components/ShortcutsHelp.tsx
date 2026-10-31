@@ -19,6 +19,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
       ['Enter', 'Open the note'],
       ['/', 'Search'],
       ['Letter', 'New note'],
+      ['Alt E', 'Read / Edit, in a note'],
       ['Esc', 'Close'],
       ['Ctrl ↵', 'Close'],
     ],

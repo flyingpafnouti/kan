@@ -267,7 +267,7 @@ function NotePreview({ text }: { text: string }) {
 
   return (
     <div ref={box} className={`max-h-36 overflow-hidden ${cut ? 'mask-b-from-60%' : ''}`}>
-      <Markdown text={text} className="text-[15px] leading-snug" />
+      <Markdown text={text} className="centered-images text-[15px] leading-snug" />
     </div>
   )
 }

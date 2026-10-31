@@ -3,6 +3,7 @@ import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { hasSession, supabase } from '../lib/supabase'
 import type { Issue, Note, NoteKind } from '../lib/types'
 import { uuid } from '../lib/id'
+import { imageLinks, stripImages } from '../lib/images'
 import { toast } from '../lib/toast'
 import { readCache, writeCache } from '../lib/cache'
 import { enqueue, onReject, overlay, overlayRow } from '../lib/outbox'
@@ -13,14 +14,17 @@ const COLUMNS = 'id, body, kind, created_at, updated_at'
 
 /**
  * Issue drafted from a note: the first line, or the first sentence of a dictated paragraph, becomes the title
- * and the rest the notes.
+ * and the rest the notes. Images never go in the title: they follow the notes.
  */
 export function issueFromNote(text: string) {
-  const t = text.trim()
+  const t = stripImages(text)
   const line = t.split('\n', 1)[0]
   const sentence = line.match(/^.+?[.!?](?=\s)/)?.[0] ?? line
   const cut = Math.min(sentence.length, 500)
-  return { title: t.slice(0, cut).trim().replace(/\.$/, '') || 'Idea', body: t.slice(cut).trim() }
+  return {
+    title: t.slice(0, cut).trim().replace(/\.$/, '') || 'Idea',
+    body: [t.slice(cut).trim(), ...imageLinks(text)].filter(Boolean).join('\n\n'),
+  }
 }
 
 /** The user's notes, newest first. */

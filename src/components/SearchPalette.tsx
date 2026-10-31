@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { NOTE_KINDS, PRIORITIES, type Issue, type Note } from '../lib/types'
 import { search } from '../lib/fuzzy'
+import { stripImages } from '../lib/images'
 import { issueFromNote } from '../hooks/useNotes'
 import { useScrollLock } from '../hooks/useScrollLock'
 import { StatusIcon } from './StatusIcon'
@@ -54,7 +55,7 @@ export function NoteSearchPalette({
   onPick: (note: Note) => void
   onClose: () => void
 }) {
-  const items = useMemo(() => notes.map((note) => ({ ...note, ...issueFromNote(note.body), note })), [notes])
+  const items = useMemo(() => notes.map((note) => ({ ...note, ...issueFromNote(stripImages(note.body)), note })), [notes])
   return (
     <Palette
       items={items}

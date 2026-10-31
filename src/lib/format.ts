@@ -1,4 +1,5 @@
 import MarkdownIt, { type StateBlock, type StateInline } from 'markdown-it'
+import { imagePath, readyImageUrl } from './images'
 
 /*
  * Markdown for the issue and note bodies. Raw HTML is escaped, so the output is safe to inject.
@@ -92,6 +93,20 @@ md.renderer.rules.link_open = (tokens, i, options, env, self) => {
   tokens[i].attrSet('target', '_blank')
   tokens[i].attrSet('rel', 'noopener noreferrer')
   return linkOpen(tokens, i, options, env, self)
+}
+
+// Note images have no public URL: the Markdown component fills in their src once it has the file.
+const image = md.renderer.rules.image!
+md.renderer.rules.image = (tokens, i, options, env, self) => {
+  const path = imagePath(String(tokens[i].attrGet('src')))
+  if (!path) return image(tokens, i, options, env, self)
+  const width = tokens[i].content.match(/\|(\d{1,4})$/)?.[1]
+  const url = readyImageUrl(path)
+  return (
+    `<span class="note-image"${width ? ` style="width:${width}px"` : ''}>` +
+    `<img data-note-image="${escape(path)}"${url ? ` src="${escape(url)}"` : ''} alt="Image" loading="lazy">` +
+    '<span class="image-grip" data-grip title="Drag to resize, double-click to reset"></span></span>'
+  )
 }
 
 export function renderMarkdown(src: string): string {
