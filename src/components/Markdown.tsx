@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { createPortal } from 'react-dom'
 import { renderMarkdown, type DiagramMode } from '../lib/format'
 import { imageUrl } from '../lib/images'
+import type { DiagramLayout } from '../lib/mermaid'
 import { useTheme } from '../lib/theme'
 import { toast } from '../lib/toast'
 
@@ -102,19 +103,37 @@ function ImageZoom({ src, onClose }: { src: string; onClose: () => void }) {
 
 const MAX_DIAGRAM_SCALE = 12
 const DIAGRAM_ZOOM_STEP = 1.5
+const FLOWCHART = /^\s*(?:flowchart|graph)\b/m
+/** Matches the p-4 of .mermaid-zoom. */
+const ZOOM_PADDING = 16
+/** Offset of a side of the diagram: centered when it fits on screen, otherwise with no blank space before or after. */
+const inView = (offset: number, size: number, screen: number) =>
+  size < screen ? (screen - size) / 2 : Math.min(0, Math.max(screen - size, offset))
+const DIAGRAM_SLIDERS = [
+  { key: 'density', label: 'Diagram density', low: 'Dense', high: 'Airy' },
+  { key: 'shape', label: 'Diagram shape', low: 'Portrait', high: 'Landscape' },
+] as const
 const ESCAPE_ONLY = ['Escape']
 
 /**
- * The diagram over the whole screen: wheel or pinch to zoom, drag to pan, Escape to leave.
+ * The diagram over the whole screen: wheel, pinch or double-click to zoom, drag to pan, Escape to leave.
  * A click does nothing, so a short drag cannot close it. Touch screens have no Escape key: they get a button.
  * Other screens get + and − buttons, for a mouse or a touchpad that zooms poorly.
+ * A flowchart also gets sliders for its shape and density, for this view only: the note keeps its layout.
+ * Once laid out that way it shows at its real size, to pan around, rather than shrunk to fit the screen.
  */
-function DiagramZoom({ svg, onClose }: { svg: string; onClose: () => void }) {
+function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; onClose: () => void }) {
   useCloseKeys(onClose, ESCAPE_ONLY)
+  const theme = useTheme()
   const overlay = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const view = useRef({ x: 0, y: 0, scale: 1 })
   const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const minScale = useRef(1)
+  const realSize = useRef(false)
+  const layout = useRef<DiagramLayout>({ shape: 0, density: 0 })
+  const stale = useRef(false)
+  const shaping = useRef(false)
 
   // Written directly: re-rendering would rebuild the SVG on every pointer move.
   const update = (x: number, y: number, scale: number) => {
@@ -124,9 +143,52 @@ function DiagramZoom({ svg, onClose }: { svg: string; onClose: () => void }) {
   /** Keeps the point under (cx, cy) in place while scaling by factor. */
   const zoomAt = (cx: number, cy: number, factor: number) => {
     const { x, y, scale } = view.current
-    const next = Math.min(MAX_DIAGRAM_SCALE, Math.max(1, scale * factor))
+    const next = Math.min(MAX_DIAGRAM_SCALE, Math.max(minScale.current, scale * factor))
     const f = next / scale
     update(cx - f * (cx - x), cy - f * (cy - y), next)
+  }
+
+  /**
+   * Swaps the drawing at its real size, the part at the middle of the screen staying there.
+   * The first time, the top of the diagram instead: a long one would otherwise open somewhere in its middle.
+   */
+  const place = (drawn: string) => {
+    const el = content.current
+    if (!el) return
+    const before = el.querySelector('svg')!.getBoundingClientRect()
+    const first = !realSize.current
+    const fx = first ? 0.5 : (innerWidth / 2 - before.left) / before.width
+    const fy = first ? 0 : (innerHeight / 2 - before.top) / before.height
+    el.innerHTML = drawn
+    const svg = el.querySelector('svg')!
+    const { width, height } = svg.viewBox.baseVal
+    svg.style.width = `${width}px`
+    svg.style.height = `${height}px`
+    minScale.current = Math.min(1, (innerWidth - 2 * ZOOM_PADDING) / width, (innerHeight - 2 * ZOOM_PADDING) / height)
+    const scale = first ? 1 : view.current.scale
+    update(
+      inView(innerWidth / 2 - (fx * width + ZOOM_PADDING) * scale, (width + 2 * ZOOM_PADDING) * scale, innerWidth),
+      inView(innerHeight / 2 - (fy * height + ZOOM_PADDING) * scale, (height + 2 * ZOOM_PADDING) * scale, innerHeight),
+      scale,
+    )
+    realSize.current = true
+  }
+
+  /** One drawing at a time, then the latest position: a fast slider would otherwise queue them all. */
+  const reshape = async (change: Partial<DiagramLayout>) => {
+    layout.current = { ...layout.current, ...change }
+    stale.current = true
+    if (shaping.current) return
+    shaping.current = true
+    const { drawShaped } = await import('../lib/mermaid')
+    while (stale.current) {
+      stale.current = false
+      await drawShaped(source, theme, layout.current)
+        // Written directly as well, and the diagram in place stays if this drawing fails.
+        .then(place)
+        .catch((err) => console.warn(err))
+    }
+    shaping.current = false
   }
 
   useEffect(() => {
@@ -164,6 +226,10 @@ function DiagramZoom({ svg, onClose }: { svg: string; onClose: () => void }) {
       }}
       onPointerUp={(e) => pointers.current.delete(e.pointerId)}
       onPointerCancel={(e) => pointers.current.delete(e.pointerId)}
+      onDoubleClick={(e) => {
+        // Two quick clicks on + already zoom twice.
+        if (!(e.target as Element).closest('button, input')) zoomAt(e.clientX, e.clientY, DIAGRAM_ZOOM_STEP)
+      }}
       className="fixed inset-0 z-50 animate-fade cursor-grab touch-none overflow-hidden bg-white select-none active:cursor-grabbing dark:bg-neutral-900"
     >
       <div
@@ -191,6 +257,30 @@ function DiagramZoom({ svg, onClose }: { svg: string; onClose: () => void }) {
           </button>
         ))}
       </div>
+      {FLOWCHART.test(source) && (
+        <div
+          // Same as the buttons: the overlay would capture the pointer.
+          onPointerDown={(e) => e.stopPropagation()}
+          className="absolute bottom-3 left-1/2 grid -translate-x-1/2 cursor-default grid-cols-[auto_7rem_auto] items-center gap-x-2 gap-y-1 rounded-md bg-white/90 px-2.5 py-1.5 text-xs text-neutral-600 ring-1 ring-neutral-500/20 dark:bg-neutral-900/90 dark:text-neutral-300"
+        >
+          {DIAGRAM_SLIDERS.map(({ key, label, low, high }) => (
+            <Fragment key={key}>
+              <span className="text-right">{low}</span>
+              <input
+                type="range"
+                aria-label={label}
+                min={-1}
+                max={1}
+                step={0.05}
+                defaultValue={0}
+                onChange={(e) => void reshape({ [key]: Number(e.target.value) })}
+                className="w-full cursor-pointer accent-neutral-500"
+              />
+              <span>{high}</span>
+            </Fragment>
+          ))}
+        </div>
+      )}
       <button
         type="button"
         aria-label="Close diagram"
@@ -206,8 +296,11 @@ function DiagramZoom({ svg, onClose }: { svg: string; onClose: () => void }) {
   )
 }
 
-/** The markup of the diagram under a click, null elsewhere. */
-const diagramAt = (target: HTMLElement) => target.closest('.mermaid-diagram svg')?.outerHTML ?? null
+/** The diagram under a click, null elsewhere. */
+function diagramAt(target: HTMLElement) {
+  const svg = target.closest('.mermaid-diagram svg')
+  return svg && { svg: svg.outerHTML, source: svg.closest<HTMLElement>('.mermaid-diagram')!.dataset.source! }
+}
 
 /**
  * Rendered Markdown whose images and diagrams open full screen on a click. Images resize from a grip
@@ -226,13 +319,13 @@ export function ResizableMarkdown({
 }) {
   const drag = useRef<{ x: number; width: number; limit: number; frame: HTMLElement; moved: boolean }>(undefined)
   const [zoom, setZoom] = useState<string | null>(null)
-  const [diagram, setDiagram] = useState<string | null>(null)
+  const [diagram, setDiagram] = useState<ReturnType<typeof diagramAt>>(null)
   const grip = (e: { target: EventTarget }) => (e.target as Element).closest<HTMLElement>('[data-grip]')
   const pathOf = (frame: HTMLElement) => frame.querySelector('img')!.dataset.noteImage!
   return (
     <>
       {zoom && <ImageZoom src={zoom} onClose={() => setZoom(null)} />}
-      {diagram && <DiagramZoom svg={diagram} onClose={() => setDiagram(null)} />}
+      {diagram && <DiagramZoom {...diagram} onClose={() => setDiagram(null)} />}
       <Markdown
         text={text}
         diagrams={onEditLine ? 'editable' : 'shown'}
