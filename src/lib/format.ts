@@ -88,10 +88,19 @@ const PENCIL =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
   '<path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>'
 
+const COPY =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>'
+
 const fence = md.renderer.rules.fence!
 md.renderer.rules.fence = (tokens, i, options, env, self) => {
   const token = tokens[i]
-  if (token.info.trim().split(/\s+/)[0] !== 'mermaid') return fence(tokens, i, options, env, self)
+  const language = token.info.trim().split(/\s+/)[0]
+  if (language === 'python') {
+    const copy = `<button type="button" class="code-copy" title="Copy code" aria-label="Copy code">${COPY}</button>`
+    return `<div class="code-block">${fence(tokens, i, options, env, self)}${copy}</div>\n`
+  }
+  if (language !== 'mermaid') return fence(tokens, i, options, env, self)
   const line = `data-line="${token.map![0]}"`
   const { diagrams } = env as { diagrams: DiagramMode }
   if (diagrams === 'hidden') return `<div class="mermaid-placeholder" ${line}>Diagram</div>\n`

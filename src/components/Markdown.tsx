@@ -3,12 +3,25 @@ import { createPortal } from 'react-dom'
 import { renderMarkdown, type DiagramMode } from '../lib/format'
 import { imageUrl } from '../lib/images'
 import { useTheme } from '../lib/theme'
+import { toast } from '../lib/toast'
 
-/** Rendered Markdown; MathJax and Mermaid are fetched the first time a text needs them. */
+async function copyCode(button: Element) {
+  try {
+    const code = button.parentElement!.querySelector('code')!.textContent!
+    await navigator.clipboard.writeText(code.replace(/\n$/, ''))
+    toast('Code copied')
+  } catch {
+    // No clipboard outside secure contexts, such as the dev server opened from the phone.
+    toast('Copy failed')
+  }
+}
+
+/** Rendered Markdown; MathJax, Mermaid and highlight.js are fetched the first time a text needs them. */
 export function Markdown({
   text,
   diagrams = 'hidden',
   className = '',
+  onClick,
   ...rest
 }: { text: string; diagrams?: DiagramMode } & Omit<ComponentProps<'div'>, 'children'>) {
   const html = useMemo(() => renderMarkdown(text, diagrams), [text, diagrams])
@@ -27,6 +40,12 @@ export function Markdown({
     import('../lib/mermaid').then(({ drawDiagrams }) => drawDiagrams(el, theme)).catch((err) => console.warn(err))
   }, [html, theme])
   useEffect(() => {
+    const el = ref.current
+    if (!el?.querySelector('code.language-python')) return
+    // Offline before the chunk was cached: the code stays readable, uncolored.
+    import('../lib/highlight').then(({ highlightCode }) => highlightCode(el)).catch((err) => console.warn(err))
+  }, [html])
+  useEffect(() => {
     ref.current?.querySelectorAll<HTMLImageElement>('img[data-note-image]').forEach((img) => {
       // Unreachable, or another user's image in a shared issue: the alt text stays.
       imageUrl(img.dataset.noteImage!)
@@ -36,7 +55,21 @@ export function Markdown({
         .catch((err) => console.warn(err))
     })
   }, [html])
-  return <div ref={ref} className={`md ${className}`} dangerouslySetInnerHTML={{ __html: html }} {...rest} />
+  return (
+    <div
+      ref={ref}
+      className={`md ${className}`}
+      dangerouslySetInnerHTML={{ __html: html }}
+      onClick={(e) => {
+        const copy = (e.target as Element).closest('.code-copy')
+        if (!copy) return onClick?.(e)
+        // Not a click on what holds the text: in the list, that would open the note.
+        e.stopPropagation()
+        void copyCode(copy)
+      }}
+      {...rest}
+    />
+  )
 }
 
 /** Smallest width an image can be dragged to, so its grip stays reachable. */
@@ -68,11 +101,13 @@ function ImageZoom({ src, onClose }: { src: string; onClose: () => void }) {
 }
 
 const MAX_DIAGRAM_SCALE = 12
+const DIAGRAM_ZOOM_STEP = 1.5
 const ESCAPE_ONLY = ['Escape']
 
 /**
  * The diagram over the whole screen: wheel or pinch to zoom, drag to pan, Escape to leave.
  * A click does nothing, so a short drag cannot close it. Touch screens have no Escape key: they get a button.
+ * Other screens get + and − buttons, for a mouse or a touchpad that zooms poorly.
  */
 function DiagramZoom({ svg, onClose }: { svg: string; onClose: () => void }) {
   useCloseKeys(onClose, ESCAPE_ONLY)
@@ -101,13 +136,11 @@ function DiagramZoom({ svg, onClose }: { svg: string; onClose: () => void }) {
       e.preventDefault()
       zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY / 300))
     }
-const DIAGRAM_ZOOM_STEP = 1.5
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
   return createPortal(
- * Other screens get + and − buttons, for a mouse or a touchpad that zooms poorly.
     <div
       ref={overlay}
       onPointerDown={(e) => {
@@ -138,6 +171,26 @@ const DIAGRAM_ZOOM_STEP = 1.5
         className="mermaid-zoom absolute inset-0 origin-top-left p-4"
         dangerouslySetInnerHTML={{ __html: svg }}
       />
+      <div
+        // The overlay would capture the pointer, and the click with it.
+        onPointerDown={(e) => e.stopPropagation()}
+        className="absolute right-3 bottom-3 flex flex-col gap-1 pointer-coarse:hidden"
+      >
+        {[
+          { label: 'Zoom in', sign: '+', factor: DIAGRAM_ZOOM_STEP },
+          { label: 'Zoom out', sign: '−', factor: 1 / DIAGRAM_ZOOM_STEP },
+        ].map(({ label, sign, factor }) => (
+          <button
+            key={sign}
+            type="button"
+            aria-label={label}
+            onClick={() => zoomAt(innerWidth / 2, innerHeight / 2, factor)}
+            className="flex size-8 cursor-pointer items-center justify-center rounded-md bg-neutral-500/15 text-neutral-600 hover:bg-neutral-500/25 dark:text-neutral-300"
+          >
+            {sign}
+          </button>
+        ))}
+      </div>
       <button
         type="button"
         aria-label="Close diagram"
@@ -171,26 +224,6 @@ export function ResizableMarkdown({
   onImageWidth: (path: string, width: number | null) => void
   onEditLine?: (line: number) => void
 }) {
-      <div
-        // The overlay would capture the pointer, and the click with it.
-        onPointerDown={(e) => e.stopPropagation()}
-        className="absolute right-3 bottom-3 flex flex-col gap-1 pointer-coarse:hidden"
-      >
-        {[
-          { label: 'Zoom in', sign: '+', factor: DIAGRAM_ZOOM_STEP },
-          { label: 'Zoom out', sign: '−', factor: 1 / DIAGRAM_ZOOM_STEP },
-        ].map(({ label, sign, factor }) => (
-          <button
-            key={sign}
-            type="button"
-            aria-label={label}
-            onClick={() => zoomAt(innerWidth / 2, innerHeight / 2, factor)}
-            className="flex size-8 cursor-pointer items-center justify-center rounded-md bg-neutral-500/15 text-neutral-600 hover:bg-neutral-500/25 dark:text-neutral-300"
-          >
-            {sign}
-          </button>
-        ))}
-      </div>
   const drag = useRef<{ x: number; width: number; limit: number; frame: HTMLElement; moved: boolean }>(undefined)
   const [zoom, setZoom] = useState<string | null>(null)
   const [diagram, setDiagram] = useState<string | null>(null)

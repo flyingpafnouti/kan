@@ -11,12 +11,14 @@ export default defineConfig({
   build: {
     rolldownOptions: {
       output: {
-        // Only two things load lazily, and both go apart, out of the precache (see runtimeCaching below):
-        // MathJax with its glyph ranges (~10 MB), and Mermaid with its diagram types (~6 MB).
+        // Two lazy loads go apart, out of the precache (see runtimeCaching below): MathJax with its glyph
+        // ranges (~10 MB), and Mermaid with its diagram types (~6 MB). highlight.js is small enough to stay in.
         chunkFileNames: (chunk) =>
-          chunk.moduleIds.some((id) => id.includes('/node_modules/@mathjax/'))
-            ? 'assets/mathjax/[name]-[hash].js'
-            : 'assets/mermaid/[name]-[hash].js',
+          chunk.moduleIds.some((id) => id.includes('/node_modules/highlight.js/'))
+            ? 'assets/[name]-[hash].js'
+            : chunk.moduleIds.some((id) => id.includes('/node_modules/@mathjax/'))
+              ? 'assets/mathjax/[name]-[hash].js'
+              : 'assets/mermaid/[name]-[hash].js',
       },
     },
   },

@@ -224,7 +224,8 @@
   white-space: pre-wrap;
   color: var(--color-red-500);
 }
-.mermaid-edit {
+.mermaid-edit,
+.code-copy {
   position: absolute;
   top: 0;
   right: 0;
@@ -236,9 +237,42 @@
   background: color-mix(in oklab, var(--color-neutral-500) 12%, transparent);
   cursor: pointer;
 }
-.mermaid-edit:hover {
+.mermaid-edit:hover,
+.code-copy:hover {
   color: var(--color-accent);
 }
+.code-block {
+  position: relative;
+}
+.code-copy {
+  top: 0.25rem;
+  right: 0.25rem;
+}
+/* Room for the button above a line that reaches the edge. */
+.code-block pre {
+  padding-right: 2.5rem;
+}
+.hljs-keyword { color: var(--color-violet-700); }
+.hljs-string { color: var(--color-green-700); }
+.hljs-subst { color: var(--color-neutral-800); }
+.hljs-number,
+.hljs-literal { color: var(--color-amber-700); }
+.hljs-title { color: var(--color-blue-700); }
+.hljs-built_in,
+.hljs-type { color: var(--color-cyan-700); }
+.hljs-meta { color: var(--color-pink-700); }
+.hljs-comment {
+  color: var(--color-neutral-500);
+  font-style: italic;
+}
+.dark .hljs-keyword { color: var(--color-violet-300); }
+.dark .hljs-string { color: var(--color-green-300); }
+.dark .hljs-subst { color: var(--color-neutral-200); }
+.dark :is(.hljs-number, .hljs-literal) { color: var(--color-amber-300); }
+.dark .hljs-title { color: var(--color-blue-300); }
+.dark :is(.hljs-built_in, .hljs-type) { color: var(--color-cyan-300); }
+.dark .hljs-meta { color: var(--color-pink-300); }
+.dark .hljs-comment { color: var(--color-neutral-400); }
 .mermaid-placeholder {
   font-size: 0.85em;
   font-style: italic;
