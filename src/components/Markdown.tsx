@@ -104,6 +104,14 @@ function ImageZoom({ src, onClose }: { src: string; onClose: () => void }) {
 const MAX_DIAGRAM_SCALE = 12
 const DIAGRAM_ZOOM_STEP = 1.5
 const FLOWCHART = /^\s*(?:flowchart|graph)\b/m
+/** Pixels moved by an arrow key press, which repeats while held. */
+const ARROW_STEP = 80
+const ARROWS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+}
 /** Matches the p-4 of .mermaid-zoom. */
 const ZOOM_PADDING = 16
 /** Offset of a side of the diagram: centered when it fits on screen, otherwise with no blank space before or after. */
@@ -116,7 +124,8 @@ const DIAGRAM_SLIDERS = [
 const ESCAPE_ONLY = ['Escape']
 
 /**
- * The diagram over the whole screen: wheel, pinch or double-click to zoom, drag to pan, Escape to leave.
+ * The diagram over the whole screen: wheel, pinch, double-click or Ctrl + and − to zoom, drag or arrow keys to pan,
+ * Escape to leave.
  * A click does nothing, so a short drag cannot close it. Touch screens have no Escape key: they get a button.
  * Other screens get + and − buttons, for a mouse or a touchpad that zooms poorly.
  * A flowchart also gets sliders for its shape and density, for this view only: the note keeps its layout.
@@ -147,6 +156,7 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
     const f = next / scale
     update(cx - f * (cx - x), cy - f * (cy - y), next)
   }
+  const zoomCenter = (factor: number) => zoomAt(innerWidth / 2, innerHeight / 2, factor)
 
   /**
    * Swaps the drawing at its real size, the part at the middle of the screen staying there.
@@ -202,6 +212,27 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  useEffect(() => {
+    // Capture phase, and stopped there, like the other keys of this view. A focused slider keeps its arrows.
+    const onKey = (e: KeyboardEvent) => {
+      // Not the browser's own zoom of the page. "=" is + without Shift on a QWERTY keyboard.
+      const zoom = !(e.ctrlKey || e.metaKey) ? 0 : e.key === '+' || e.key === '=' ? DIAGRAM_ZOOM_STEP : e.key === '-' ? 1 / DIAGRAM_ZOOM_STEP : 0
+      if (zoom) {
+        e.preventDefault()
+        e.stopPropagation()
+        return zoomCenter(zoom)
+      }
+      const arrow = ARROWS[e.key]
+      if (!arrow || e.target instanceof HTMLInputElement) return
+      e.preventDefault()
+      e.stopPropagation()
+      const { x, y, scale } = view.current
+      update(x - arrow[0] * ARROW_STEP, y - arrow[1] * ARROW_STEP, scale)
+    }
+    addEventListener('keydown', onKey, true)
+    return () => removeEventListener('keydown', onKey, true)
+  }, [])
+
   return createPortal(
     <div
       ref={overlay}
@@ -250,7 +281,7 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
             key={sign}
             type="button"
             aria-label={label}
-            onClick={() => zoomAt(innerWidth / 2, innerHeight / 2, factor)}
+            onClick={() => zoomCenter(factor)}
             className="flex size-8 cursor-pointer items-center justify-center rounded-md bg-neutral-500/15 text-neutral-600 hover:bg-neutral-500/25 dark:text-neutral-300"
           >
             {sign}
