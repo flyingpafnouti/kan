@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { navigate } from '../lib/router'
 import { toast } from '../lib/toast'
 import { search } from '../lib/fuzzy'
@@ -8,7 +8,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import { byLastChange, useProjects, type ProjectRow } from '../hooks/useProjects'
 import { ChevronIcon, MoreIcon, PlusIcon } from '../components/icons'
 
-export function Projects() {
+export function Projects({ pane, onLock }: { pane: RefObject<HTMLDivElement | null>; onLock: (locked: boolean) => void }) {
   const { projects: stored, create, rename, remove, leave, inviteLink } = useProjects()
   // Listed by last change; other pages keep the creation order of useProjects.
   const projects = useMemo(() => stored && [...stored].sort(byLastChange), [stored])
@@ -32,6 +32,12 @@ export function Projects() {
   }
 
   useEffect(() => () => clearTimeout(typedTimer.current), [])
+
+  const locked = editing !== null
+  useEffect(() => {
+    onLock(locked)
+    return () => onLock(false)
+  }, [locked, onLock])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -89,101 +95,104 @@ export function Projects() {
     <main className="mx-auto min-h-dvh max-w-xl px-4 pt-safe pb-safe">
       <HomeHeader current="projects" />
 
-      {projects && projects.length > 0 && (
-        <button
-          data-nav-id="all"
-          onClick={() => navigate({ name: 'all' })}
-          className={`mb-3 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-neutral-600 transition ${
-            selected === 'all' ? 'ring-1 ring-accent/50' : 'ring-1 ring-neutral-200/70 dark:ring-neutral-800'
-          } hover:bg-white dark:text-neutral-400 dark:hover:bg-neutral-900`}
-        >
-          <span className="text-[15px] font-medium">All issues</span>
-          <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs tabular-nums text-neutral-500 dark:bg-neutral-800">
-            {projects.reduce((n, p) => n + p.open, 0)}
-          </span>
-          <ChevronIcon className="ml-auto shrink-0 text-neutral-300 dark:text-neutral-700" />
-        </button>
-      )}
-
-      <ul className="space-y-2">
-        {projects?.map((p) =>
-          editing === p.id ? (
-            <EditRow
-              key={p.id}
-              project={p}
-              onDone={(n) => {
-                if (n && n !== p.name) rename(p.id, n)
-                setEditing(null)
-              }}
-              onShare={(reset) => share(p, reset)}
-              onLeave={() => {
-                if (confirm(`Leave "${p.name}"? The other members keep it.`)) leave(p.id)
-                setEditing(null)
-              }}
-              onDelete={() => {
-                const question =
-                  p.members > 1
-                    ? `Delete "${p.name}" and all its issues for all ${p.members} members?`
-                    : `Delete "${p.name}" and all its issues?`
-                if (confirm(question)) remove(p.id)
-                setEditing(null)
-              }}
-            />
-          ) : (
-            <li
-              key={p.id}
-              data-nav-id={p.id}
-              className={`flex items-center rounded-2xl bg-white shadow-sm dark:bg-neutral-900 ${
-                selected === p.id ? 'ring-1 ring-accent/50' : 'ring-1 ring-neutral-200/70 dark:ring-neutral-800'
-              }`}
-            >
-              <button
-                onClick={() => navigate({ name: 'board', projectId: p.id })}
-                className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-4 text-left"
-              >
-                <span className="truncate text-[17px] font-medium">{p.name}</span>
-                {p.open > 0 && (
-                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs tabular-nums text-neutral-500 dark:bg-neutral-800">
-                    {p.open}
-                  </span>
-                )}
-                {p.members > 1 && (
-                  <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">Shared</span>
-                )}
-                <ChevronIcon className="ml-auto shrink-0 text-neutral-300 dark:text-neutral-700" />
-              </button>
-              <button
-                onClick={() => setEditing(p.id)}
-                aria-label="Options"
-                className="px-4 py-4 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
-              >
-                <MoreIcon />
-              </button>
-            </li>
-          ),
-        )}
-      </ul>
-
-      {projects?.length === 0 && <p className="py-8 text-center text-neutral-500">No projects yet.</p>}
-
-      {projects && (
-        <form onSubmit={submit} className="mt-4 flex items-center gap-2">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="New project"
-            enterKeyHint="done"
-            className="min-w-0 flex-1 rounded-2xl border border-dashed border-neutral-300 bg-transparent px-4 py-3.5 outline-none focus:border-accent focus:border-solid dark:border-neutral-700"
-          />
+      {/* The fixed elements stay out: a transform on an ancestor would tie them to it instead of the screen. */}
+      <div ref={pane}>
+        {projects && projects.length > 0 && (
           <button
-            aria-label="Create"
-            disabled={!name.trim()}
-            className="rounded-2xl bg-accent p-3.5 text-white transition disabled:opacity-30"
+            data-nav-id="all"
+            onClick={() => navigate({ name: 'all' })}
+            className={`mb-3 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-neutral-600 transition ${
+              selected === 'all' ? 'ring-1 ring-accent/50' : 'ring-1 ring-neutral-200/70 dark:ring-neutral-800'
+            } hover:bg-white dark:text-neutral-400 dark:hover:bg-neutral-900`}
           >
-            <PlusIcon />
+            <span className="text-[15px] font-medium">All issues</span>
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs tabular-nums text-neutral-500 dark:bg-neutral-800">
+              {projects.reduce((n, p) => n + p.open, 0)}
+            </span>
+            <ChevronIcon className="ml-auto shrink-0 text-neutral-300 dark:text-neutral-700" />
           </button>
-        </form>
-      )}
+        )}
+
+        <ul className="space-y-2">
+          {projects?.map((p) =>
+            editing === p.id ? (
+              <EditRow
+                key={p.id}
+                project={p}
+                onDone={(n) => {
+                  if (n && n !== p.name) rename(p.id, n)
+                  setEditing(null)
+                }}
+                onShare={(reset) => share(p, reset)}
+                onLeave={() => {
+                  if (confirm(`Leave "${p.name}"? The other members keep it.`)) leave(p.id)
+                  setEditing(null)
+                }}
+                onDelete={() => {
+                  const question =
+                    p.members > 1
+                      ? `Delete "${p.name}" and all its issues for all ${p.members} members?`
+                      : `Delete "${p.name}" and all its issues?`
+                  if (confirm(question)) remove(p.id)
+                  setEditing(null)
+                }}
+              />
+            ) : (
+              <li
+                key={p.id}
+                data-nav-id={p.id}
+                className={`flex items-center rounded-2xl bg-white shadow-sm dark:bg-neutral-900 ${
+                  selected === p.id ? 'ring-1 ring-accent/50' : 'ring-1 ring-neutral-200/70 dark:ring-neutral-800'
+                }`}
+              >
+                <button
+                  onClick={() => navigate({ name: 'board', projectId: p.id })}
+                  className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-4 text-left"
+                >
+                  <span className="truncate text-[17px] font-medium">{p.name}</span>
+                  {p.open > 0 && (
+                    <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs tabular-nums text-neutral-500 dark:bg-neutral-800">
+                      {p.open}
+                    </span>
+                  )}
+                  {p.members > 1 && (
+                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">Shared</span>
+                  )}
+                  <ChevronIcon className="ml-auto shrink-0 text-neutral-300 dark:text-neutral-700" />
+                </button>
+                <button
+                  onClick={() => setEditing(p.id)}
+                  aria-label="Options"
+                  className="px-4 py-4 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                >
+                  <MoreIcon />
+                </button>
+              </li>
+            ),
+          )}
+        </ul>
+
+        {projects?.length === 0 && <p className="py-8 text-center text-neutral-500">No projects yet.</p>}
+
+        {projects && (
+          <form onSubmit={submit} className="mt-4 flex items-center gap-2">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="New project"
+              enterKeyHint="done"
+              className="min-w-0 flex-1 rounded-2xl border border-dashed border-neutral-300 bg-transparent px-4 py-3.5 outline-none focus:border-accent focus:border-solid dark:border-neutral-700"
+            />
+            <button
+              aria-label="Create"
+              disabled={!name.trim()}
+              className="rounded-2xl bg-accent p-3.5 text-white transition disabled:opacity-30"
+            >
+              <PlusIcon />
+            </button>
+          </form>
+        )}
+      </div>
 
       {typed && (
         <div className="pointer-events-none fixed inset-x-0 bottom-8 flex justify-center pb-safe">

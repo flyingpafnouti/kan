@@ -13,7 +13,16 @@ interface Options {
   onSwipe: (dir: -1 | 1) => void
 }
 
-/** Horizontal swipe anywhere on `area`: `content` follows the finger, then slides to the next page or back. */
+/** True on a code block, table or formula wide enough to scroll sideways: the finger belongs to it. */
+function scrollsSideways(target: Element) {
+  const el = target.closest('pre, table, .math-display')
+  return el !== null && el.scrollWidth > el.clientWidth
+}
+
+/**
+ * Horizontal swipe anywhere on `area`: `content` follows the finger, then slides to the next page or back.
+ * The ref may move to another element during `onSwipe`: the page that replaces the old one slides in.
+ */
 export function useSwipe(area: RefObject<HTMLElement | null>, content: RefObject<HTMLElement | null>, options: Options) {
   const opts = useRef(options)
   useEffect(() => {
@@ -49,7 +58,7 @@ export function useSwipe(area: RefObject<HTMLElement | null>, content: RefObject
         !opts.current.enabled ||
         t.clientX < EDGE ||
         t.clientX > innerWidth - EDGE ||
-        (e.target instanceof Element && e.target.closest('input, textarea, form'))
+        (e.target instanceof Element && (e.target.closest('input, textarea, form') || scrollsSideways(e.target)))
       start = skip ? null : { x: t.clientX, y: t.clientY, t: e.timeStamp }
       axis = null
       dx = 0

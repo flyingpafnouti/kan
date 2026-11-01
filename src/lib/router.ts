@@ -34,6 +34,8 @@ export function href(route: Route): string {
 
 export function navigate(route: Route) {
   location.hash = href(route)
+  // The browser's own event comes later: telling useRoute now lets flushSync render the new page at once.
+  dispatchEvent(new HashChangeEvent('hashchange'))
 }
 
 const LAST_KEY = 'last-project'

@@ -6,10 +6,9 @@ import { useRoute } from './lib/router'
 import { useSyncStatus } from './hooks/useSyncStatus'
 import { Login } from './pages/Login'
 import { MfaGate } from './pages/MfaGate'
-import { Projects } from './pages/Projects'
+import { Home } from './pages/Home'
 import { Board } from './pages/Board'
 import { AllIssues } from './pages/AllIssues'
-import { Notes } from './pages/Notes'
 import { Join } from './pages/Join'
 import { Toaster } from './components/Toaster'
 
@@ -66,10 +65,8 @@ export function App() {
         <Board key={route.projectId} projectId={route.projectId} />
       ) : route.name === 'all' ? (
         <AllIssues />
-      ) : route.name === 'notes' ? (
-        <Notes />
       ) : (
-        <Projects />
+        <Home current={route.name === 'notes' ? 'notes' : 'projects'} />
       )}
       <Toaster />
     </>

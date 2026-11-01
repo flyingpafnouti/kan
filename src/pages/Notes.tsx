@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { navigate } from '../lib/router'
 import { toast } from '../lib/toast'
 import type { NoteKind } from '../lib/types'
@@ -19,40 +19,25 @@ import { MicIcon, SendIcon, StopIcon } from '../components/icons'
 
 const SHORT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
-const VIEW_KEY = 'notes-view'
-
-/** Type of notes shown, kept on this device. */
-function storedView(): NoteKind {
-  try {
-    return localStorage.getItem(VIEW_KEY) === 'perso' ? 'perso' : 'pro'
-  } catch {
-    return 'pro'
-  }
-}
-
-function storeView(kind: NoteKind) {
-  try {
-    localStorage.setItem(VIEW_KEY, kind)
-  } catch {
-    /* storage unavailable: the choice lasts until the page closes */
-  }
-}
-
 /**
  * Loose ideas, newest first. Typed in the field on top, or dictated: each transcript becomes its own note.
  * A note can then be turned into an issue of a project. The page shows one type of note, pro or perso, and new
  * notes take that type.
  */
-export function Notes() {
+export function Notes({
+  view,
+  onView,
+  pane,
+  onLock,
+}: {
+  view: NoteKind
+  onView: (kind: NoteKind) => void
+  pane: RefObject<HTMLDivElement | null>
+  onLock: (locked: boolean) => void
+}) {
   const { notes: all, add, update, setKind, remove, toIssue } = useNotes()
-  const [view, setView] = useState(storedView)
   // Notes from before the kind column, still in the cache, have none: they are pro.
   const notes = useMemo(() => all && all.filter((n) => (n.kind ?? 'pro') === view), [all, view])
-
-  function show(kind: NoteKind) {
-    setView(kind)
-    storeView(kind)
-  }
 
   const projects = useProjectList()
   const desktop = useMediaQuery('(pointer: fine)')
@@ -113,93 +98,103 @@ export function Notes() {
   // Looked up among all the notes: one moved to the other type stays open.
   const open = openId ? all?.find((n) => n.id === openId) : undefined
 
+  // Leaving the page would cut a dictation short.
+  const locked = Boolean(open) || searching || dictation.state !== 'idle'
+  useEffect(() => {
+    onLock(locked)
+    return () => onLock(false)
+  }, [locked, onLock])
+
   return (
     <main className={`mx-auto min-h-dvh max-w-xl px-4 pt-safe ${desktop ? 'pb-safe' : 'pb-28'}`}>
       <HomeHeader current="notes" keys={!open && !searching} />
 
-      {notes && (
-        <form
-          onSubmit={submit}
-          className="mb-4 flex items-end gap-2 rounded-2xl bg-white py-2 pr-2 pl-4 shadow-sm ring-1 ring-neutral-200/70 focus-within:ring-accent dark:bg-neutral-900 dark:ring-neutral-800"
-        >
-          <AutoTextarea
-            ref={composer}
-            commands
-            value={draft}
-            onChange={setDraft}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                submit()
-              } else if (e.key === 'Escape') e.currentTarget.blur()
-            }}
-            placeholder="New note…"
-            enterKeyHint="send"
-            className="max-h-60 min-w-0 flex-1 overflow-y-auto py-1.5 text-[15px]"
-          />
-          {desktop && dictationSupported && (
-            <div className="pb-1">
-              <DictationButton dictation={dictation} label="Dictate a note" meter={false}>
-                <PostProcessButton text={draft} onResult={setDraft} />
-              </DictationButton>
-            </div>
-          )}
-          <button
-            aria-label="Add"
-            disabled={!draft.trim()}
-            className="rounded-xl bg-accent p-2 text-white transition disabled:opacity-30"
+      {/* The fixed elements stay out: a transform on an ancestor would tie them to it instead of the screen. */}
+      <div ref={pane}>
+        {notes && (
+          <form
+            onSubmit={submit}
+            className="mb-4 flex items-end gap-2 rounded-2xl bg-white py-2 pr-2 pl-4 shadow-sm ring-1 ring-neutral-200/70 focus-within:ring-accent dark:bg-neutral-900 dark:ring-neutral-800"
           >
-            <SendIcon width={18} height={18} />
-          </button>
-        </form>
-      )}
-
-      {notes && (
-        <div className="mb-2 flex justify-end">
-          <KindSwitch value={view} onChange={show} />
-        </div>
-      )}
-
-      <ul className="space-y-2">
-        {(recording || dictation.state === 'transcribing') && (
-          <li className="flex items-center gap-3 rounded-2xl border border-dashed border-neutral-300 px-4 py-3.5 text-sm text-neutral-500 dark:border-neutral-700">
-            {recording ? (
-              <>
-                <span>Listening…</span>
-                <div className="h-1 w-24 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
-                  <div ref={dictation.meter} className="h-full origin-left scale-x-0 rounded-full bg-red-500/70" />
-                </div>
-              </>
-            ) : (
-              <span className="animate-pulse">Transcribing…</span>
-            )}
-          </li>
-        )}
-        {notes?.map((n) => (
-          <li key={n.id} data-nav-id={n.id}>
-            <button
-              onClick={(e) => {
-                // A link in the preview opens in its own tab, not the note.
-                if ((e.target as HTMLElement).closest('a')) return
-                setSelected(n.id)
-                setOpenId(n.id)
+            <AutoTextarea
+              ref={composer}
+              commands
+              value={draft}
+              onChange={setDraft}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  submit()
+                } else if (e.key === 'Escape') e.currentTarget.blur()
               }}
-              className={`w-full scroll-my-6 rounded-2xl bg-white px-4 py-3 text-left shadow-sm ring-1 dark:bg-neutral-900 ${
-                selected === n.id ? 'ring-accent/50' : 'ring-neutral-200/70 dark:ring-neutral-800'
-              }`}
+              placeholder="New note…"
+              enterKeyHint="send"
+              className="max-h-60 min-w-0 flex-1 overflow-y-auto py-1.5 text-[15px]"
+            />
+            {desktop && dictationSupported && (
+              <div className="pb-1">
+                <DictationButton dictation={dictation} label="Dictate a note" meter={false}>
+                  <PostProcessButton text={draft} onResult={setDraft} />
+                </DictationButton>
+              </div>
+            )}
+            <button
+              aria-label="Add"
+              disabled={!draft.trim()}
+              className="rounded-xl bg-accent p-2 text-white transition disabled:opacity-30"
             >
-              <NotePreview text={n.body} />
-              <p className="mt-1.5 text-xs text-neutral-400">{SHORT.format(new Date(n.created_at))}</p>
+              <SendIcon width={18} height={18} />
             </button>
-          </li>
-        ))}
-      </ul>
+          </form>
+        )}
 
-      {notes?.length === 0 && dictation.state === 'idle' && (
-        <p className="py-8 text-center text-neutral-500">
-          {dictationSupported && !desktop ? 'No notes yet. Tap the mic and say your idea.' : 'No notes yet.'}
-        </p>
-      )}
+        {notes && (
+          <div className="mb-2 flex justify-end">
+            <KindSwitch value={view} onChange={onView} />
+          </div>
+        )}
+
+        <ul className="space-y-2">
+          {(recording || dictation.state === 'transcribing') && (
+            <li className="flex items-center gap-3 rounded-2xl border border-dashed border-neutral-300 px-4 py-3.5 text-sm text-neutral-500 dark:border-neutral-700">
+              {recording ? (
+                <>
+                  <span>Listening…</span>
+                  <div className="h-1 w-24 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
+                    <div ref={dictation.meter} className="h-full origin-left scale-x-0 rounded-full bg-red-500/70" />
+                  </div>
+                </>
+              ) : (
+                <span className="animate-pulse">Transcribing…</span>
+              )}
+            </li>
+          )}
+          {notes?.map((n) => (
+            <li key={n.id} data-nav-id={n.id}>
+              <button
+                onClick={(e) => {
+                  // A link in the preview opens in its own tab, not the note.
+                  if ((e.target as HTMLElement).closest('a')) return
+                  setSelected(n.id)
+                  setOpenId(n.id)
+                }}
+                className={`w-full scroll-my-6 rounded-2xl bg-white px-4 py-3 text-left shadow-sm ring-1 dark:bg-neutral-900 ${
+                  selected === n.id ? 'ring-accent/50' : 'ring-neutral-200/70 dark:ring-neutral-800'
+                }`}
+              >
+                <NotePreview text={n.body} />
+                <p className="mt-1.5 text-xs text-neutral-400">{SHORT.format(new Date(n.created_at))}</p>
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {notes?.length === 0 && dictation.state === 'idle' && (
+          <p className="py-8 text-center text-neutral-500">
+            {dictationSupported && !desktop ? 'No notes yet. Tap the mic and say your idea.' : 'No notes yet.'}
+          </p>
+        )}
+      </div>
 
       {/* Phone: one tap to start, one to stop, and the transcript lands as a new card. */}
       {!desktop && dictationSupported && !open && (
@@ -224,7 +219,7 @@ export function Notes() {
           notes={all}
           onPick={(note) => {
             setSearching(false)
-            show(note.kind ?? 'pro')
+            onView(note.kind ?? 'pro')
             setSelected(note.id)
             setOpenId(note.id)
           }}
