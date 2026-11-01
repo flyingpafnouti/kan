@@ -61,6 +61,12 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* touch-action only counts up to the nearest scroller, and fields are scrollers: each one must leave sideways moves to useSwipe. */
+.swipeable,
+.swipeable :is(.overflow-y-auto, textarea, input) {
+  touch-action: pan-y pinch-zoom;
+}
+
 @keyframes sheet-in {
   from { transform: translateY(16px); opacity: 0; }
 }

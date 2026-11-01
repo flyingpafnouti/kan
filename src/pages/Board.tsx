@@ -24,6 +24,7 @@ import { useProject, useProjectList } from '../hooks/useProjects'
 import { toast } from '../lib/toast'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useSwipe } from '../hooks/useSwipe'
+import { useIssueSwipe } from '../hooks/useIssueSwipe'
 import { useIssueKeys } from '../hooks/useIssueKeys'
 import { Column } from '../components/Column'
 import { IssueCard } from '../components/IssueCard'
@@ -193,6 +194,7 @@ export function Board({ projectId }: { projectId: string }) {
     setSelected(id)
     setOpenId(id)
   }
+  const sheet = useIssueSwipe(!desktop && !searching, prev, next, step)
 
   return (
     <main
@@ -299,35 +301,39 @@ export function Board({ projectId }: { projectId: string }) {
         />
       )}
 
-      {open && (
-        <IssueSheet
-          key={open.id}
-          issue={open}
-          index={index}
-          onOpenIssue={step}
-          onLink={(id, parent_id) => update(id, { parent_id })}
-          onAddBlocker={(title) => addBlocker(open, title)}
-          onSave={(patch) => update(open.id, patch)}
-          onStatus={(s) => setStatus(open.id, s)}
-          onPriority={(priority) => update(open.id, { priority })}
-          onDelete={(text) => {
-            remove({ ...open, ...text })
-            setOpenId(null)
-          }}
-          onClose={() => setOpenId(null)}
-          onPrev={prev && (() => step(prev.id))}
-          onNext={next && (() => step(next.id))}
-          instant={open.id === steppedTo}
-          projects={projects}
-          onCopy={(target, text) => {
-            copyTo(open, target, text)
-            const name = projects?.find((p) => p.id === target)?.name ?? 'the project'
-            toast(target === projectId ? 'Copy added on top of To do' : `Copied to ${name}`, {
-              action: target === projectId ? undefined : { label: 'Open', run: () => navigate({ name: 'board', projectId: target }) },
-            })
-          }}
-        />
-      )}
+      <div ref={sheet.area}>
+        {open && (
+          <IssueSheet
+            key={open.id}
+            issue={open}
+            index={index}
+            onOpenIssue={step}
+            onLink={(id, parent_id) => update(id, { parent_id })}
+            onAddBlocker={(title) => addBlocker(open, title)}
+            onSave={(patch) => update(open.id, patch)}
+            onStatus={(s) => setStatus(open.id, s)}
+            onPriority={(priority) => update(open.id, { priority })}
+            onDelete={(text) => {
+              remove({ ...open, ...text })
+              setOpenId(null)
+            }}
+            onClose={() => setOpenId(null)}
+            onPrev={prev && (() => step(prev.id))}
+            onNext={next && (() => step(next.id))}
+            instant={open.id === steppedTo}
+            pane={sheet.pane}
+            onLock={sheet.onLock}
+            projects={projects}
+            onCopy={(target, text) => {
+              copyTo(open, target, text)
+              const name = projects?.find((p) => p.id === target)?.name ?? 'the project'
+              toast(target === projectId ? 'Copy added on top of To do' : `Copied to ${name}`, {
+                action: target === projectId ? undefined : { label: 'Open', run: () => navigate({ name: 'board', projectId: target }) },
+              })
+            }}
+          />
+        )}
+      </div>
     </main>
   )
 }

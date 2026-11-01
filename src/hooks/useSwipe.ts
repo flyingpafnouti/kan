@@ -9,14 +9,18 @@ interface Options {
   enabled: boolean
   hasPrev: boolean
   hasNext: boolean
+  /** A swipe may start on a text field that is not being edited: where the fields fill the page. */
+  overFields?: boolean
   /** -1 goes to the previous page, 1 to the next. */
   onSwipe: (dir: -1 | 1) => void
 }
 
-/** True on a code block, table or formula wide enough to scroll sideways: the finger belongs to it. */
-function scrollsSideways(target: Element) {
-  const el = target.closest('pre, table, .math-display')
-  return el !== null && el.scrollWidth > el.clientWidth
+/** True where the finger already has a job: a field, an image grip, or a code block, table or formula wide enough to scroll sideways. */
+function takesTouch(target: Element, overFields = false) {
+  const field = target.closest('input, textarea, form')
+  if (field && (!overFields || field === document.activeElement)) return true
+  const wide = target.closest('pre, table, .math-display')
+  return target.closest('[data-grip]') !== null || (wide !== null && wide.scrollWidth > wide.clientWidth)
 }
 
 /**
@@ -58,7 +62,7 @@ export function useSwipe(area: RefObject<HTMLElement | null>, content: RefObject
         !opts.current.enabled ||
         t.clientX < EDGE ||
         t.clientX > innerWidth - EDGE ||
-        (e.target instanceof Element && (e.target.closest('input, textarea, form') || scrollsSideways(e.target)))
+        (e.target instanceof Element && takesTouch(e.target, opts.current.overFields))
       start = skip ? null : { x: t.clientX, y: t.clientY, t: e.timeStamp }
       axis = null
       dx = 0

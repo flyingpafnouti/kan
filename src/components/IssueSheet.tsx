@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { PRIORITIES, STATUSES, type Issue, type Priority, type Project, type Status } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useScrollLock } from '../hooks/useScrollLock'
@@ -34,6 +34,9 @@ interface Props {
   onNext?: () => void
   /** Reached from a neighbour: no opening animation. */
   instant?: boolean
+  /** What a swipe moves, and tells the swipe when not to: see useIssueSwipe. */
+  pane: RefObject<HTMLDivElement | null>
+  onLock: (locked: boolean) => void
   /** Targets of "Copy to…", which gets the latest text. */
   projects?: Project[] | null
   onCopy?: (projectId: string, text: { title: string; body: string }) => void
@@ -53,6 +56,8 @@ export function IssueSheet({
   onPrev,
   onNext,
   instant,
+  pane,
+  onLock,
   projects,
   onCopy,
 }: Props) {
@@ -125,6 +130,12 @@ export function IssueSheet({
     receive(body.trim() ? `${body.trimEnd()}${body.endsWith('\n') ? '' : ' '}${text}` : text)
   })
 
+  const locked = dictation.state !== 'idle' || picking !== null
+  useEffect(() => {
+    onLock(locked)
+    return () => onLock(false)
+  }, [locked, onLock])
+
   const changeMode = (next: Mode, at = body.length) => {
     if (next === 'edit') caret.current = at
     setMode(next)
@@ -176,7 +187,8 @@ export function IssueSheet({
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center md:p-6">
       <div className={`absolute inset-0 bg-black/40 ${instant ? '' : 'animate-fade'}`} onClick={close} />
       <div
-        className={`relative ${instant ? '' : 'animate-sheet'} flex max-h-[85dvh] w-full max-w-lg flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900`}
+        ref={pane}
+        className={`swipeable relative ${instant ? '' : 'animate-sheet'} flex max-h-[85dvh] w-full max-w-lg flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900`}
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300 md:hidden dark:bg-neutral-700" />
         <div className="flex-1 overflow-y-auto px-5 pt-4">
