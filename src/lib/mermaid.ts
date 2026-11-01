@@ -61,6 +61,18 @@ export function drawShaped(source: string, theme: Theme, { shape, density }: Dia
   return render(source.slice(0, frontMatter) + directive + source.slice(frontMatter), theme)
 }
 
+/** An edge of a flowchart and the two things it joins, a node or a subgraph. */
+export type DiagramLink = { id: string; start: string; end: string; thickness: string }
+
+/**
+ * The edges one can see: a ~~~ link only steers the layout.
+ * From the parser: an id such as L_a_b_0 cannot be split back once node ids hold underscores, or the edge has its own id.
+ */
+export async function flowchartLinks(source: string) {
+  const { db } = await mermaid.mermaidAPI.getDiagramFromText(source)
+  return (db as { getData(): { edges: DiagramLink[] } }).getData().edges.filter((link) => link.thickness !== 'invisible')
+}
+
 /** Replaces the source of each .mermaid-diagram under root by its drawing, or adds the error beside the source. */
 export async function drawDiagrams(root: HTMLElement, theme: Theme) {
   for (const el of root.querySelectorAll<HTMLElement>('.mermaid-diagram')) {

@@ -289,3 +289,10 @@
   height: 100%;
   max-width: none !important;
 }
+.mermaid-zoom svg.flowchart .node {
+  cursor: pointer;
+}
+/* With the child combinator: the text of an edge label is an .edgeLabel as well, and would stay dimmed. */
+.diagram-focus :is(.node, .edgePaths path, .edgeLabels > .edgeLabel):not(.focused) {
+  opacity: 0.13;
+}

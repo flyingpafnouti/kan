@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { createPortal } from 'react-dom'
+import { focusNode, nodeAt } from '../lib/diagramFocus'
 import { renderMarkdown, type DiagramMode } from '../lib/format'
 import { imageUrl } from '../lib/images'
-import type { DiagramLayout } from '../lib/mermaid'
+import type { DiagramLayout, DiagramLink } from '../lib/mermaid'
 import { useTheme } from '../lib/theme'
 import { toast } from '../lib/toast'
 
@@ -110,6 +111,8 @@ const ARROW_STEP = 80
 const WHEEL_LINE = 16
 /** Pixels moved per pixel of wheel event: a two-finger scroll is too fast at full speed. */
 const WHEEL_PAN = 0.25
+/** Pixels a pointer can move and still count as a click rather than a drag. */
+const CLICK_SLOP = 4
 const ARROWS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
   ArrowRight: [1, 0],
@@ -130,13 +133,14 @@ const ESCAPE_ONLY = ['Escape']
 /**
  * The diagram over the whole screen: Ctrl + wheel, pinch, double-click or Ctrl + and − to zoom, two-finger scroll,
  * wheel, drag or arrow keys to pan, Escape to leave.
- * A click does nothing, so a short drag cannot close it. Touch screens have no Escape key: they get a button.
+ * A click on a flowchart node dims all but its neighbours and their edges; elsewhere, or with Escape, it brings
+ * everything back. No other click does anything, so a short drag cannot close it. Touch screens have no Escape key:
+ * they get a button.
  * Other screens get + and − buttons, for a mouse or a touchpad that zooms poorly.
  * A flowchart also gets sliders for its shape and density, for this view only: the note keeps its layout.
  * Once laid out that way it shows at its real size, to pan around, rather than shrunk to fit the screen.
  */
 function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; onClose: () => void }) {
-  useCloseKeys(onClose, ESCAPE_ONLY)
   const theme = useTheme()
   const overlay = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
@@ -147,6 +151,15 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
   const layout = useRef<DiagramLayout>({ shape: 0, density: 0 })
   const stale = useRef(false)
   const shaping = useRef(false)
+  const links = useRef<DiagramLink[]>([])
+  const focused = useRef<string | null>(null)
+  const press = useRef<{ x: number; y: number; node: string | null }>(undefined)
+
+  const focus = (node: string | null) => {
+    focused.current = node
+    focusNode(content.current!.querySelector('svg')!, links.current, node)
+  }
+  useCloseKeys(() => (focused.current === null ? onClose() : focus(null)), ESCAPE_ONLY)
 
   // Written directly: re-rendering would rebuild the SVG on every pointer move.
   const update = (x: number, y: number, scale: number) => {
@@ -178,6 +191,7 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
     const { width, height } = svg.viewBox.baseVal
     svg.style.width = `${width}px`
     svg.style.height = `${height}px`
+    focusNode(svg, links.current, focused.current)
     minScale.current = Math.min(1, (innerWidth - 2 * ZOOM_PADDING) / width, (innerHeight - 2 * ZOOM_PADDING) / height)
     const scale = first ? 1 : view.current.scale
     update(
@@ -204,6 +218,16 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
     }
     shaping.current = false
   }
+
+  useEffect(() => {
+    if (!FLOWCHART.test(source)) return
+    import('../lib/mermaid')
+      .then(({ flowchartLinks }) => flowchartLinks(source))
+      .then((all) => {
+        links.current = all
+      })
+      .catch((err) => console.warn(err))
+  }, [source])
 
   useEffect(() => {
     const el = overlay.current!
@@ -247,11 +271,14 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId)
         pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        // Read here: once captured, the click itself lands on the overlay. A second finger makes it a pinch.
+        press.current = e.button === 0 && pointers.current.size === 1 ? { x: e.clientX, y: e.clientY, node: nodeAt(e.target as Element) } : undefined
       }}
       onPointerMove={(e) => {
         const before = pointers.current.get(e.pointerId)
         if (!before) return
         const after = { x: e.clientX, y: e.clientY }
+        if (press.current && Math.hypot(after.x - press.current.x, after.y - press.current.y) > CLICK_SLOP) press.current = undefined
         const dx = after.x - before.x
         const dy = after.y - before.y
         const other = [...pointers.current].find(([id]) => id !== e.pointerId)?.[1]
@@ -263,8 +290,15 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
         update(x + dx / 2, y + dy / 2, scale)
         if (spread) zoomAt((after.x + other.x) / 2, (after.y + other.y) / 2, Math.hypot(after.x - other.x, after.y - other.y) / spread)
       }}
-      onPointerUp={(e) => pointers.current.delete(e.pointerId)}
-      onPointerCancel={(e) => pointers.current.delete(e.pointerId)}
+      onPointerUp={(e) => {
+        pointers.current.delete(e.pointerId)
+        if (press.current) focus(press.current.node)
+        press.current = undefined
+      }}
+      onPointerCancel={(e) => {
+        pointers.current.delete(e.pointerId)
+        press.current = undefined
+      }}
       onDoubleClick={(e) => {
         // Two quick clicks on + already zoom twice.
         if (!(e.target as Element).closest('button, input')) zoomAt(e.clientX, e.clientY, DIAGRAM_ZOOM_STEP)
