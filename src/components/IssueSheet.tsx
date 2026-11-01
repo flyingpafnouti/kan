@@ -222,6 +222,7 @@ export function IssueSheet({
           ) : (
             <AutoTextarea
               ref={field}
+              commands
               value={body}
               onChange={setBody}
               className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"

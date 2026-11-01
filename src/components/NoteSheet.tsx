@@ -245,6 +245,7 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
               ref={field}
               value={body}
               onChange={setBody}
+              commands
               className="min-h-32 text-[15px] leading-relaxed"
               placeholder={
                 dictation.state === 'recording' ? 'Speak…' : dictation.state === 'transcribing' ? 'Transcribing…' : 'Idea…'

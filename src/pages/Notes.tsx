@@ -124,6 +124,7 @@ export function Notes() {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
                 submit()
+            commands
               } else if (e.key === 'Escape') e.currentTarget.blur()
             }}
             placeholder="New note…"
