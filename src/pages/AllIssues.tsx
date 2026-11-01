@@ -4,6 +4,7 @@ import { STATUSES, doneSince, isArchived, type Issue, type Status } from '../lib
 import { navigate } from '../lib/router'
 import { useIssues } from '../hooks/useIssues'
 import { useProjectList } from '../hooks/useProjects'
+import { readCache, writeCache } from '../lib/cache'
 import { toast } from '../lib/toast'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useSwipe } from '../hooks/useSwipe'
@@ -11,19 +12,31 @@ import { useIssueKeys } from '../hooks/useIssueKeys'
 import { Column } from '../components/Column'
 import { IssueSheet } from '../components/IssueSheet'
 import { StatusTabs } from '../components/StatusTabs'
+import { Switch } from '../components/Switch'
 import { BackIcon, SearchIcon } from '../components/icons'
 import { SearchPalette } from '../components/SearchPalette'
 import { SyncBadge } from '../components/SyncBadge'
 
+type Sort = 'priority' | 'recent'
+
+const SORTS: { id: Sort; label: string }[] = [
+  { id: 'priority', label: 'Priority' },
+  { id: 'recent', label: 'Recent' },
+]
+
+const SORT_KEY = 'all-issues-sort'
+
 /**
  * Read-mostly board of every project's issues: no drag and drop nor quick add, since positions and
- * new issues belong to a project. Cards are sorted by priority, then project order, then position.
+ * new issues belong to a project. Cards are sorted by priority, then project order, then position,
+ * or by last edit, the latest on top.
  */
 export function AllIssues() {
   const { issues, column, update, setStatus, remove, copyTo } = useIssues(null)
   const projects = useProjectList()
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const [tab, setTab] = useState<Status>('todo')
+  const [sort, setSort] = useState<Sort>(() => (readCache<Sort>(SORT_KEY) === 'recent' ? 'recent' : 'priority'))
   const [openId, setOpenId] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
   // Issue reached with the sheet's previous / next: shown without the opening animation.
@@ -63,6 +76,8 @@ export function AllIssues() {
     (a.priority ?? 4) - (b.priority ?? 4) ||
     (rank.get(a.project_id) ?? 0) - (rank.get(b.project_id) ?? 0) ||
     a.position - b.position
+  // By instant: the dates written here and those sent by the server differ in format.
+  const byRecent = (a: Issue, b: Issue) => Date.parse(b.updated_at) - Date.parse(a.updated_at)
   const all = (status: Status) => column(status).filter(known)
 
   const now = Date.now()
@@ -70,7 +85,7 @@ export function AllIssues() {
     .filter((x) => isArchived(x, now))
     .sort((a, b) => doneSince(b).localeCompare(doneSince(a)))
   const visible = (status: Status) =>
-    (status === 'done' ? all('done').filter((x) => !isArchived(x, now)) : all(status)).sort(byPriority)
+    (status === 'done' ? all('done').filter((x) => !isArchived(x, now)) : all(status)).sort(sort === 'recent' ? byRecent : byPriority)
   const counts = { todo: all('todo').length, doing: all('doing').length, done: visible('done').length }
   // No reordering here: the order is computed.
   const { selected, setSelected, sibling } = useIssueKeys({
@@ -89,6 +104,11 @@ export function AllIssues() {
     onStatus: setStatus,
     projectName: name,
     selected,
+  }
+
+  function changeSort(next: Sort) {
+    setSort(next)
+    writeCache(SORT_KEY, next)
   }
 
   const open = openId ? issues?.find((x) => x.id === openId) : undefined
@@ -118,6 +138,7 @@ export function AllIssues() {
           <h1 className="truncate text-xl font-semibold tracking-tight">All issues</h1>
           <div className="ml-auto flex items-center gap-1">
             <SyncBadge />
+            <Switch label="Sort issues" options={SORTS} value={sort} onChange={changeSort} />
             {issues && (
               <button
                 // Mounting the field inside the tap lets iOS open the keyboard.
