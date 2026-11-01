@@ -106,6 +106,10 @@ const DIAGRAM_ZOOM_STEP = 1.5
 const FLOWCHART = /^\s*(?:flowchart|graph)\b/m
 /** Pixels moved by an arrow key press, which repeats while held. */
 const ARROW_STEP = 80
+/** Pixels per line of a wheel event counted in lines, as Firefox does for a mouse wheel. */
+const WHEEL_LINE = 16
+/** Pixels moved per pixel of wheel event: a two-finger scroll is too fast at full speed. */
+const WHEEL_PAN = 0.25
 const ARROWS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
   ArrowRight: [1, 0],
@@ -124,8 +128,8 @@ const DIAGRAM_SLIDERS = [
 const ESCAPE_ONLY = ['Escape']
 
 /**
- * The diagram over the whole screen: wheel, pinch, double-click or Ctrl + and − to zoom, drag or arrow keys to pan,
- * Escape to leave.
+ * The diagram over the whole screen: Ctrl + wheel, pinch, double-click or Ctrl + and − to zoom, two-finger scroll,
+ * wheel, drag or arrow keys to pan, Escape to leave.
  * A click does nothing, so a short drag cannot close it. Touch screens have no Escape key: they get a button.
  * Other screens get + and − buttons, for a mouse or a touchpad that zooms poorly.
  * A flowchart also gets sliders for its shape and density, for this view only: the note keeps its layout.
@@ -206,7 +210,11 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
     // Not React's onWheel, which is passive: ctrl+wheel would zoom the whole page.
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY / 300))
+      // A touchpad pinch also arrives as a wheel event with ctrlKey set.
+      if (e.ctrlKey) return zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY / 300))
+      const { x, y, scale } = view.current
+      const unit = WHEEL_PAN * (e.deltaMode === WheelEvent.DOM_DELTA_LINE ? WHEEL_LINE : 1)
+      update(x - e.deltaX * unit, y - e.deltaY * unit, scale)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
