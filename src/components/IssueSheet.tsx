@@ -17,7 +17,8 @@ interface Props {
   onSave: (patch: { title?: string; body?: string }) => void
   onStatus: (s: Status) => void
   onPriority: (p: Priority | null) => void
-  onDelete: () => void
+  /** Gets the latest text, for the undo: it may not have been saved yet. */
+  onDelete: (text: { title: string; body: string }) => void
   onClose: () => void
   /** Previous / next issue of the same column (Alt + ↑ / ↓), absent at the ends. Alt + ← / → calls onStatus. */
   onPrev?: () => void
@@ -28,8 +29,6 @@ interface Props {
   projects?: Project[] | null
   onCopy?: (projectId: string, text: { title: string; body: string }) => void
 }
-
-const SAVE_DELAY = 600
 
 export function IssueSheet({
   issue,
@@ -53,11 +52,16 @@ export function IssueSheet({
   /** Where the caret goes on the way to Edit. Unset when the sheet opens: no keyboard popping up on a phone. */
   const caret = useRef<number>(undefined)
   const saved = useRef({ title: issue.title, body: issue.body })
-  const timer = useRef<number>(undefined)
+  const latest = useRef({ title, body })
+  latest.current = { title, body }
+  /** Deleted: nothing left to save. */
+  const ended = useRef(false)
+  const unmounted = useRef(false)
 
-  // Commit pending text, debounced while typing and immediately on close.
-  const flush = (t = title, b = body) => {
-    clearTimeout(timer.current)
+  // Saved once, on close or on the way to a neighbour, rather than while typing.
+  const flush = () => {
+    if (ended.current) return
+    const { title: t, body: b } = latest.current
     const patch: { title?: string; body?: string } = {}
     if (t.trim() && t.trim() !== saved.current.title) patch.title = t.trim()
     if (b !== saved.current.body) patch.body = b
@@ -65,10 +69,6 @@ export function IssueSheet({
       saved.current = { title: patch.title ?? saved.current.title, body: patch.body ?? saved.current.body }
       onSave(patch)
     }
-  }
-  const schedule = (t: string, b: string) => {
-    clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => flush(t, b), SAVE_DELAY)
   }
   const close = () => {
     flush()
@@ -80,11 +80,32 @@ export function IssueSheet({
     go()
   }
 
-  // The transcript is appended to the notes; a result landing after close is still saved by the pending timer.
-  const dictation = useDictation((text) => {
-    const b = body.trim() ? `${body.trimEnd()}${body.endsWith('\n') ? '' : ' '}${text}` : text
+  // Safety net for edits that never reach close: the app sent to the background (and maybe killed),
+  // or the sheet unmounted by a navigation.
+  useEffect(() => {
+    unmounted.current = false
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      unmounted.current = true
+      document.removeEventListener('visibilitychange', onHide)
+      flush()
+    }
+  }, [])
+
+  /** For a transcript or a rewrite's undo: both can land once the sheet is closed, with no later close to save them. */
+  const receive = (b: string) => {
     setBody(b)
-    schedule(title, b)
+    if (!unmounted.current) return
+    latest.current = { ...latest.current, body: b }
+    flush()
+  }
+
+  // The transcript is appended to the notes.
+  const dictation = useDictation((text) => {
+    receive(body.trim() ? `${body.trimEnd()}${body.endsWith('\n') ? '' : ' '}${text}` : text)
   })
 
   const changeMode = (next: Mode, at = body.length) => {
@@ -139,11 +160,7 @@ export function IssueSheet({
             <div className="min-w-0 flex-1">
               <AutoTextarea
                 value={title}
-                onChange={(v) => {
-                  const t = v.replace(/\n/g, ' ')
-                  setTitle(t)
-                  schedule(t, body)
-                }}
+                onChange={(v) => setTitle(v.replace(/\n/g, ' '))}
                 className="text-lg font-semibold"
                 placeholder="Title"
               />
@@ -175,21 +192,14 @@ export function IssueSheet({
             <ResizableMarkdown
               text={body}
               className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"
-              onImageWidth={(path, width) => {
-                const b = setImageWidth(body, path, width)
-                setBody(b)
-                schedule(title, b)
-              }}
+              onImageWidth={(path, width) => setBody((b) => setImageWidth(b, path, width))}
               onEditLine={(line) => changeMode('edit', body.split('\n').slice(0, line).join('\n').length + (line ? 1 : 0))}
             />
           ) : (
             <AutoTextarea
               ref={field}
               value={body}
-              onChange={(v) => {
-                setBody(v)
-                schedule(title, v)
-              }}
+              onChange={setBody}
               className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"
               placeholder={
                 dictation.state === 'recording'
@@ -208,13 +218,7 @@ export function IssueSheet({
               <ModeSwitch label="Issue mode" value={mode} onChange={(m) => changeMode(m)} />
               {dictationSupported && (
                 <DictationButton dictation={dictation} label="Dictate notes">
-                  <PostProcessButton
-                    text={body}
-                    onResult={(b) => {
-                      setBody(b)
-                      schedule(title, b)
-                    }}
-                  />
+                  <PostProcessButton text={body} onResult={receive} />
                 </DictationButton>
               )}
             </div>
@@ -254,7 +258,11 @@ export function IssueSheet({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
+              onClick={() => {
+                if (!confirmDelete) return setConfirmDelete(true)
+                ended.current = true
+                onDelete({ title: title.trim() || issue.title, body })
+              }}
               className="rounded-lg py-1 text-sm text-red-500"
             >
               {confirmDelete ? 'Confirm deletion' : 'Delete'}
@@ -263,10 +271,7 @@ export function IssueSheet({
               // Kept quiet on purpose: a plain grey label that opens the native project picker.
               <select
                 value=""
-                onChange={(e) => {
-                  flush()
-                  onCopy(e.target.value, { title: title.trim() || issue.title, body })
-                }}
+                onChange={(e) => onCopy(e.target.value, { title: title.trim() || issue.title, body })}
                 aria-label="Copy to another project"
                 className="ml-auto min-w-0 max-w-36 truncate bg-transparent py-1 text-right text-sm text-neutral-400 outline-none hover:text-neutral-600 dark:hover:text-neutral-300"
               >

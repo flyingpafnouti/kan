@@ -303,8 +303,8 @@ export function Board({ projectId }: { projectId: string }) {
           onSave={(patch) => update(open.id, patch)}
           onStatus={(s) => setStatus(open.id, s)}
           onPriority={(priority) => update(open.id, { priority })}
-          onDelete={() => {
-            remove(open)
+          onDelete={(text) => {
+            remove({ ...open, ...text })
             setOpenId(null)
           }}
           onClose={() => setOpenId(null)}
