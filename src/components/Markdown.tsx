@@ -101,11 +101,13 @@ function DiagramZoom({ svg, onClose }: { svg: string; onClose: () => void }) {
       e.preventDefault()
       zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY / 300))
     }
+const DIAGRAM_ZOOM_STEP = 1.5
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
   return createPortal(
+ * Other screens get + and − buttons, for a mouse or a touchpad that zooms poorly.
     <div
       ref={overlay}
       onPointerDown={(e) => {
@@ -169,6 +171,26 @@ export function ResizableMarkdown({
   onImageWidth: (path: string, width: number | null) => void
   onEditLine?: (line: number) => void
 }) {
+      <div
+        // The overlay would capture the pointer, and the click with it.
+        onPointerDown={(e) => e.stopPropagation()}
+        className="absolute right-3 bottom-3 flex flex-col gap-1 pointer-coarse:hidden"
+      >
+        {[
+          { label: 'Zoom in', sign: '+', factor: DIAGRAM_ZOOM_STEP },
+          { label: 'Zoom out', sign: '−', factor: 1 / DIAGRAM_ZOOM_STEP },
+        ].map(({ label, sign, factor }) => (
+          <button
+            key={sign}
+            type="button"
+            aria-label={label}
+            onClick={() => zoomAt(innerWidth / 2, innerHeight / 2, factor)}
+            className="flex size-8 cursor-pointer items-center justify-center rounded-md bg-neutral-500/15 text-neutral-600 hover:bg-neutral-500/25 dark:text-neutral-300"
+          >
+            {sign}
+          </button>
+        ))}
+      </div>
   const drag = useRef<{ x: number; width: number; limit: number; frame: HTMLElement; moved: boolean }>(undefined)
   const [zoom, setZoom] = useState<string | null>(null)
   const [diagram, setDiagram] = useState<string | null>(null)
