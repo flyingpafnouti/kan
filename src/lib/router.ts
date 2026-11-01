@@ -32,6 +32,20 @@ export function href(route: Route): string {
   return route.name === 'projects' ? '#/' : `#/${route.name}`
 }
 
+let pendingOpen: string | null = null
+
+/** Item to open once the page it belongs to is shown. */
+export const setPendingOpen = (id: string) => {
+  pendingOpen = id
+}
+
+/** Read in a state initializer, which may run twice, so it is cleared apart. */
+export const getPendingOpen = () => pendingOpen
+
+export const clearPendingOpen = () => {
+  pendingOpen = null
+}
+
 export function navigate(route: Route) {
   location.hash = href(route)
   // The browser's own event comes later: telling useRoute now lets flushSync render the new page at once.

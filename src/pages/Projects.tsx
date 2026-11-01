@@ -2,13 +2,24 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } 
 import { navigate } from '../lib/router'
 import { toast } from '../lib/toast'
 import { search } from '../lib/fuzzy'
+import { DesktopSearch } from '../components/DesktopSearch'
 import { HomeHeader } from '../components/HomeHeader'
 import { ShortcutsHelp } from '../components/ShortcutsHelp'
+import { useDesktopSearch } from '../hooks/useDesktopSearch'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { byLastChange, useProjects, type ProjectRow } from '../hooks/useProjects'
 import { ChevronIcon, MoreIcon, PlusIcon } from '../components/icons'
+import type { NoteKind } from '../lib/types'
 
-export function Projects({ pane, onLock }: { pane: RefObject<HTMLDivElement | null>; onLock: (locked: boolean) => void }) {
+export function Projects({
+  pane,
+  onLock,
+  onView,
+}: {
+  pane: RefObject<HTMLDivElement | null>
+  onLock: (locked: boolean) => void
+  onView: (kind: NoteKind) => void
+}) {
   const { projects: stored, create, rename, remove, leave, inviteLink } = useProjects()
   // Listed by last change; other pages keep the creation order of useProjects.
   const projects = useMemo(() => stored && [...stored].sort(byLastChange), [stored])
@@ -18,6 +29,8 @@ export function Projects({ pane, onLock }: { pane: RefObject<HTMLDivElement | nu
   const [selected, setSelected] = useState<string | null>(null)
   // Shortcuts only matter with a keyboard and a mouse.
   const desktop = useMediaQuery('(pointer: fine)')
+  const desktopSearch = useDesktopSearch()
+  const [searching, setSearching] = useState(false)
   // Type-ahead: letters typed in a row select the best matching project, then fade out.
   const [typed, setTyped] = useState('')
   const typedTimer = useRef<number>(undefined)
@@ -45,7 +58,10 @@ export function Projects({ pane, onLock }: { pane: RefObject<HTMLDivElement | nu
       if (typing || !projects?.length || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return
       const items = ['all', ...projects.map((p) => p.id)]
       const i = selected ? items.indexOf(selected) : -1
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (e.key === '/' && desktopSearch) {
+        e.preventDefault()
+        setSearching(true)
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
         const next = i < 0 ? 0 : Math.min(items.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)))
         setSelected(items[next])
@@ -65,7 +81,7 @@ export function Projects({ pane, onLock }: { pane: RefObject<HTMLDivElement | nu
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
-  }, [projects, selected, typed])
+  }, [projects, selected, typed, desktopSearch])
 
   useEffect(() => {
     if (selected) document.querySelector(`[data-nav-id="${selected}"]`)?.scrollIntoView({ block: 'nearest' })
@@ -93,7 +109,7 @@ export function Projects({ pane, onLock }: { pane: RefObject<HTMLDivElement | nu
 
   return (
     <main className="mx-auto min-h-dvh max-w-xl px-4 pt-safe pb-safe">
-      <HomeHeader current="projects" />
+      <HomeHeader current="projects" keys={!searching} />
 
       {/* The fixed elements stay out: a transform on an ancestor would tie them to it instead of the screen. */}
       <div ref={pane}>
@@ -203,6 +219,17 @@ export function Projects({ pane, onLock }: { pane: RefObject<HTMLDivElement | nu
       )}
 
       {desktop && projects && <ShortcutsHelp />}
+      {searching && (
+        <DesktopSearch
+          scope={{ kind: 'all' }}
+          openHere={(hit) => {
+            // The notes page shares this one's state: its type is set before going there.
+            if (hit.type === 'note') onView(hit.note.kind ?? 'pro')
+            return false
+          }}
+          onClose={() => setSearching(false)}
+        />
+      )}
     </main>
   )
 }

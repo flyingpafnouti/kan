@@ -14,7 +14,9 @@ export default defineConfig({
         // Two lazy loads go apart, out of the precache (see runtimeCaching below): MathJax with its glyph
         // ranges (~10 MB), and Mermaid with its diagram types (~6 MB). highlight.js is small enough to stay in.
         chunkFileNames: (chunk) =>
-          chunk.moduleIds.some((id) => id.includes('/node_modules/highlight.js/'))
+          chunk.moduleIds.some((id) => /\/node_modules\/(minisearch|chrono-node)\/|\/src\/lib\/hybrid/.test(id))
+            ? 'assets/search/[name]-[hash].js'
+            : chunk.moduleIds.some((id) => id.includes('/node_modules/highlight.js/'))
             ? 'assets/[name]-[hash].js'
             : chunk.moduleIds.some((id) => id.includes('/node_modules/@mathjax/'))
               ? 'assets/mathjax/[name]-[hash].js'
@@ -29,7 +31,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon.svg'],
       workbox: {
-        globIgnores: ['assets/mathjax/**', 'assets/mermaid/**'],
+        // The hybrid search, its worker and their 27 MB runtime are for computers: phones must not download them.
+        globIgnores: ['assets/mathjax/**', 'assets/mermaid/**', 'assets/search/**', 'assets/embed.worker-*', 'assets/*.wasm'],
         // Hashed names never change: cached at first use, math then renders offline.
         runtimeCaching: [
           {
@@ -41,6 +44,11 @@ export default defineConfig({
             urlPattern: /\/assets\/mermaid\//,
             handler: 'CacheFirst',
             options: { cacheName: 'mermaid', expiration: { maxEntries: 300 } },
+          },
+          {
+            urlPattern: /\/assets\/(search\/.*|embed\.worker-.*|.*\.wasm)$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'embeddings', expiration: { maxEntries: 8 } },
           },
         ],
       },

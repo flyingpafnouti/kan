@@ -18,10 +18,11 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { STATUSES, doneAtFor, doneSince, isArchived, type Issue, type Status } from '../lib/types'
 import { between } from '../lib/position'
 import { indexIssues, linksOf, nestedOrder, positionAt, siblingsIn } from '../lib/dependencies'
-import { navigate, rememberProject } from '../lib/router'
+import { clearPendingOpen, getPendingOpen, navigate, rememberProject } from '../lib/router'
 import { useIssues } from '../hooks/useIssues'
 import { useProject, useProjectList } from '../hooks/useProjects'
 import { toast } from '../lib/toast'
+import { useDesktopSearch } from '../hooks/useDesktopSearch'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useSwipe } from '../hooks/useSwipe'
 import { useIssueSwipe } from '../hooks/useIssueSwipe'
@@ -32,6 +33,7 @@ import { IssueSheet } from '../components/IssueSheet'
 import { StatusTabs } from '../components/StatusTabs'
 import { QuickAddInline, QuickAddMobile } from '../components/QuickAdd'
 import { BackIcon, DownloadIcon, SearchIcon } from '../components/icons'
+import { DesktopSearch } from '../components/DesktopSearch'
 import { SearchPalette } from '../components/SearchPalette'
 import { boardToMarkdown, downloadMarkdown } from '../lib/markdown'
 import { SyncBadge } from '../components/SyncBadge'
@@ -45,9 +47,11 @@ export function Board({ projectId }: { projectId: string }) {
   const projects = useProjectList()
   // Touch screens, tablets included, get one column at a time with tabs and swipes.
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
+  const desktopSearch = useDesktopSearch()
   const [tab, setTab] = useState<Status>('todo')
-  const [openId, setOpenId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(getPendingOpen)
   const [searching, setSearching] = useState(false)
+  useEffect(clearPendingOpen, [])
   // Issue reached with the sheet's previous / next: shown without the opening animation.
   const [steppedTo, setSteppedTo] = useState<string | null>(null)
   const [dragStart, setDragStart] = useState<Issue | null>(null)
@@ -288,7 +292,19 @@ export function Board({ projectId }: { projectId: string }) {
 
       {!desktop && !open && !searching && <QuickAddMobile onAdd={handleAdd} />}
 
-      {searching && issues && (
+      {searching && desktopSearch && (
+        <DesktopSearch
+          scope={{ kind: 'project', id: projectId }}
+          openHere={(hit) => {
+            if (hit.type !== 'issue' || hit.issue.project_id !== projectId) return false
+            setOpenId(hit.id)
+            return true
+          }}
+          onClose={() => setSearching(false)}
+        />
+      )}
+
+      {searching && !desktopSearch && issues && (
         <SearchPalette
           // Done issues stay out of the search.
           issues={issues.filter((i) => i.status !== 'done')}

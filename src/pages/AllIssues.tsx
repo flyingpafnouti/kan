@@ -7,6 +7,7 @@ import { useIssues } from '../hooks/useIssues'
 import { useProjectList } from '../hooks/useProjects'
 import { readCache, writeCache } from '../lib/cache'
 import { toast } from '../lib/toast'
+import { useDesktopSearch } from '../hooks/useDesktopSearch'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useSwipe } from '../hooks/useSwipe'
 import { useIssueSwipe } from '../hooks/useIssueSwipe'
@@ -16,6 +17,7 @@ import { IssueSheet } from '../components/IssueSheet'
 import { StatusTabs } from '../components/StatusTabs'
 import { Switch } from '../components/Switch'
 import { BackIcon, SearchIcon } from '../components/icons'
+import { DesktopSearch } from '../components/DesktopSearch'
 import { SearchPalette } from '../components/SearchPalette'
 import { SyncBadge } from '../components/SyncBadge'
 
@@ -38,6 +40,7 @@ export function AllIssues() {
   const index = useMemo(() => indexIssues(issues ?? []), [issues])
   const projects = useProjectList()
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
+  const desktopSearch = useDesktopSearch()
   const [tab, setTab] = useState<Status>('todo')
   const [sort, setSort] = useState<Sort>(() => (readCache<Sort>(SORT_KEY) === 'recent' ? 'recent' : 'priority'))
   const [openId, setOpenId] = useState<string | null>(null)
@@ -191,7 +194,19 @@ export function AllIssues() {
           </div>
         ))}
 
-      {searching && issues && (
+      {searching && desktopSearch && (
+        <DesktopSearch
+          scope={{ kind: 'issues' }}
+          openHere={(hit) => {
+            if (hit.type !== 'issue') return false
+            setOpenId(hit.id)
+            return true
+          }}
+          onClose={() => setSearching(false)}
+        />
+      )}
+
+      {searching && !desktopSearch && issues && (
         <SearchPalette
           issues={issues.filter((i) => i.status !== 'done' && known(i))}
           onPick={(issue) => {

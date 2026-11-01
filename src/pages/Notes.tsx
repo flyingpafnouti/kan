@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react'
-import { navigate } from '../lib/router'
+import { clearPendingOpen, getPendingOpen, navigate } from '../lib/router'
 import { toast } from '../lib/toast'
 import type { NoteKind } from '../lib/types'
 import { useNotes } from '../hooks/useNotes'
 import { useProjectList } from '../hooks/useProjects'
+import { useDesktopSearch } from '../hooks/useDesktopSearch'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { HomeHeader } from '../components/HomeHeader'
@@ -13,6 +14,7 @@ import { KindSwitch } from '../components/KindSwitch'
 import { PostProcessButton } from '../components/PostProcessButton'
 import { NoteSheet } from '../components/NoteSheet'
 import { ShortcutsHelp } from '../components/ShortcutsHelp'
+import { DesktopSearch } from '../components/DesktopSearch'
 import { NoteSearchPalette } from '../components/SearchPalette'
 import { Markdown } from '../components/Markdown'
 import { MicIcon, SendIcon, StopIcon } from '../components/icons'
@@ -41,12 +43,14 @@ export function Notes({
 
   const projects = useProjectList()
   const desktop = useMediaQuery('(pointer: fine)')
+  const desktopSearch = useDesktopSearch()
   const [draft, setDraft] = useState('')
-  const [openId, setOpenId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(getPendingOpen)
   /** The note just created from the field: it opens ready to go on writing. */
   const [created, setCreated] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
+  useEffect(clearPendingOpen, [])
   const composer = useRef<HTMLTextAreaElement>(null)
   const dictation = useDictation((text) => add(text, view))
   const recording = dictation.state === 'recording'
@@ -214,7 +218,21 @@ export function Notes({
       {desktop && notes && <ShortcutsHelp />}
 
       {/* Over all the notes: a hit of the other type brings its list along, ready behind the sheet. */}
-      {searching && all && (
+      {searching && desktopSearch && (
+        <DesktopSearch
+          scope={{ kind: 'notes', view }}
+          openHere={(hit) => {
+            if (hit.type !== 'note') return false
+            onView(hit.note.kind ?? 'pro')
+            setSelected(hit.id)
+            setOpenId(hit.id)
+            return true
+          }}
+          onClose={() => setSearching(false)}
+        />
+      )}
+
+      {searching && !desktopSearch && all && (
         <NoteSearchPalette
           notes={all}
           onPick={(note) => {

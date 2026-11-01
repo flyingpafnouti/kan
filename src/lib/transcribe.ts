@@ -1,6 +1,9 @@
 import { maskImages, unmaskImages } from './images'
 import { supabase } from './supabase'
 
+export const CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions'
+export const CHAT_MODEL = 'openai/gpt-oss-120b'
+
 const KEY_FIELD = 'groq_api_key'
 const PROMPT_FIELD = 'post_process_prompt'
 
@@ -69,11 +72,11 @@ export async function postProcess(text: string, prompt: string) {
   const key = await getGroqKey()
   if (!key) throw new MissingKeyError()
   const masked = maskImages(text)
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await fetch(CHAT_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'openai/gpt-oss-120b',
+      model: CHAT_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT + prompt },
         { role: 'user', content: masked.text },

@@ -48,8 +48,9 @@ export interface SearchHit<T> {
 /**
  * Every query word must match the title or the body with its letters in order.
  * In the body the letters must stay close together: a long text contains almost any scattered sequence.
+ * `tight` asks the same of titles, for a search that has other ways to tolerate approximate words.
  */
-export function search<T extends { title: string; body: string }>(items: T[], query: string): SearchHit<T>[] {
+export function search<T extends { title: string; body: string }>(items: T[], query: string, tight = false): SearchHit<T>[] {
   const words = query.trim().split(/\s+/).filter(Boolean).map(fold)
   const hits: SearchHit<T>[] = []
   for (const item of items) {
@@ -57,7 +58,7 @@ export function search<T extends { title: string; body: string }>(items: T[], qu
     const body = fold(item.body)
     const hit: SearchHit<T> = { item, score: 0, title: [], body: [] }
     const ok = words.every((w) => {
-      const t = align(w, title)
+      const t = align(w, title, tight ? w.length * 2 + 2 : Infinity)
       const b = align(w, body, w.length * 2 + 2)
       // Title matches weigh double.
       if (t && (!b || t.score * 2 >= b.score)) {
