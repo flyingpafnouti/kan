@@ -86,6 +86,7 @@ export function useNotes() {
     const row: Note = { id: uuid(), body, kind, created_at: now, updated_at: now }
     setList((l) => [...(l ?? []), row])
     enqueue({ table: 'notes', id: row.id, kind: 'upsert', data: { ...row } })
+    return row.id
   }, [])
 
   const update = useCallback((id: string, body: string) => {

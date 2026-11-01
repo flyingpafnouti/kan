@@ -16,6 +16,8 @@ import { KindSwitch } from './KindSwitch'
 
 interface Props {
   note: Note
+  /** Opens on the text, ready to type, rather than on the rendered note. */
+  startEditing?: boolean
   projects: Project[] | null
   onSave: (body: string) => void
   onKind: (kind: NoteKind) => void
@@ -52,7 +54,7 @@ function storeSize(s: Size | null) {
   }
 }
 
-export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue, onClose }: Props) {
+export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDelete, onToIssue, onClose }: Props) {
   const [body, setBody] = useState(note.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const saved = useRef(note.body)
@@ -66,7 +68,7 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
   const panel = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number } & Size>(undefined)
   const [uploading, setUploading] = useState(0)
-  const [mode, setMode] = useState<Mode>('read')
+  const [mode, setMode] = useState<Mode>(startEditing ? 'edit' : 'read')
   const field = useRef<HTMLTextAreaElement>(null)
   /** Links of the images on their way to the server. */
   const pending = useRef(new Set<string>())
@@ -243,9 +245,9 @@ export function NoteSheet({ note, projects, onSave, onKind, onDelete, onToIssue,
           ) : (
             <AutoTextarea
               ref={field}
+              commands
               value={body}
               onChange={setBody}
-              commands
               className="min-h-32 text-[15px] leading-relaxed"
               placeholder={
                 dictation.state === 'recording' ? 'Speak…' : dictation.state === 'transcribing' ? 'Transcribing…' : 'Idea…'

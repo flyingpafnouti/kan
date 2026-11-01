@@ -58,6 +58,8 @@ export function Notes() {
   const desktop = useMediaQuery('(pointer: fine)')
   const [draft, setDraft] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
+  /** The note just created from the field: it opens ready to go on writing. */
+  const [created, setCreated] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
   const composer = useRef<HTMLTextAreaElement>(null)
@@ -100,8 +102,12 @@ export function Notes() {
   function submit(e?: FormEvent) {
     e?.preventDefault()
     const t = draft.trim()
-    if (t) add(t, view)
     setDraft('')
+    if (!t) return
+    const id = add(t, view)
+    setCreated(id)
+    setSelected(id)
+    setOpenId(id)
   }
 
   // Looked up among all the notes: one moved to the other type stays open.
@@ -118,13 +124,13 @@ export function Notes() {
         >
           <AutoTextarea
             ref={composer}
+            commands
             value={draft}
             onChange={setDraft}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
                 submit()
-            commands
               } else if (e.key === 'Escape') e.currentTarget.blur()
             }}
             placeholder="New note…"
@@ -230,6 +236,7 @@ export function Notes() {
         <NoteSheet
           key={open.id}
           note={open}
+          startEditing={open.id === created}
           projects={projects}
           onSave={(body) => update(open.id, body)}
           onKind={(kind) => setKind(open.id, kind)}
@@ -244,7 +251,10 @@ export function Notes() {
             const name = projects?.find((p) => p.id === projectId)?.name ?? 'the project'
             toast(`Added to ${name}`, { action: { label: 'Open', run: () => navigate({ name: 'board', projectId }) } })
           }}
-          onClose={() => setOpenId(null)}
+          onClose={() => {
+            setOpenId(null)
+            setCreated(null)
+          }}
         />
       )}
     </main>
