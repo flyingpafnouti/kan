@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { createPortal } from 'react-dom'
-import { focusNode, nodeAt } from '../lib/diagramFocus'
+import { focusNode, nodeAt, nodeNotes } from '../lib/diagramFocus'
 import { renderMarkdown, type DiagramMode } from '../lib/format'
 import { imageUrl } from '../lib/images'
 import type { DiagramLayout, DiagramLink } from '../lib/mermaid'
@@ -133,9 +133,9 @@ const ESCAPE_ONLY = ['Escape']
 /**
  * The diagram over the whole screen: Ctrl + wheel, pinch, double-click or Ctrl + and − to zoom, two-finger scroll,
  * wheel, drag or arrow keys to pan, Escape to leave.
- * A click on a flowchart node dims all but its neighbours and their edges; elsewhere, or with Escape, it brings
- * everything back. No other click does anything, so a short drag cannot close it. Touch screens have no Escape key:
- * they get a button.
+ * A click on a flowchart node dims all but its neighbours and their edges, and shows its description if the source
+ * has one, on the side away from the click; elsewhere, or with Escape, it brings everything back. No other click does
+ * anything, so a short drag cannot close it. Touch screens have no Escape key: they get a button.
  * Other screens get + and − buttons, for a mouse or a touchpad that zooms poorly.
  * A flowchart also gets sliders for its shape and density, for this view only: the note keeps its layout.
  * Once laid out that way it shows at its real size, to pan around, rather than shrunk to fit the screen.
@@ -153,11 +153,16 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
   const shaping = useRef(false)
   const links = useRef<DiagramLink[]>([])
   const focused = useRef<string | null>(null)
-  const press = useRef<{ x: number; y: number; node: string | null }>(undefined)
+  const press = useRef<{ x: number; y: number; node: ReturnType<typeof nodeAt> }>(undefined)
+  const notes = useMemo(() => nodeNotes(source), [source])
+  // React leaves the drawing alone here: its props do not change.
+  const [note, setNote] = useState<{ title: string; text: string; left: boolean } | null>(null)
 
-  const focus = (node: string | null) => {
-    focused.current = node
-    focusNode(content.current!.querySelector('svg')!, links.current, node)
+  const focus = (node: ReturnType<typeof nodeAt>, x = 0) => {
+    focused.current = node?.id ?? null
+    focusNode(content.current!.querySelector('svg')!, links.current, focused.current)
+    const text = node && notes.get(node.id)
+    setNote(text ? { title: node.title, text, left: x > innerWidth / 2 } : null)
   }
   useCloseKeys(() => (focused.current === null ? onClose() : focus(null)), ESCAPE_ONLY)
 
@@ -233,6 +238,8 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
     const el = overlay.current!
     // Not React's onWheel, which is passive: ctrl+wheel would zoom the whole page.
     const onWheel = (e: WheelEvent) => {
+      const scrolled = (e.target as Element).closest('[data-node-note]')
+      if (scrolled && scrolled.scrollHeight > scrolled.clientHeight && !e.ctrlKey) return
       e.preventDefault()
       // A touchpad pinch also arrives as a wheel event with ctrlKey set.
       if (e.ctrlKey) return zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY / 300))
@@ -292,7 +299,7 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
       }}
       onPointerUp={(e) => {
         pointers.current.delete(e.pointerId)
-        if (press.current) focus(press.current.node)
+        if (press.current) focus(press.current.node, press.current.x)
         press.current = undefined
       }}
       onPointerCancel={(e) => {
@@ -353,6 +360,18 @@ function DiagramZoom({ svg, source, onClose }: { svg: string; source: string; on
             </Fragment>
           ))}
         </div>
+      )}
+      {note && (
+        <aside
+          data-node-note
+          // The overlay would capture the pointer, and take a selection of the text for a pan.
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          className={`absolute top-3 ${note.left ? 'left-3' : 'right-3'} max-h-[calc(100%-7rem)] w-96 max-w-[calc(100%-1.5rem)] cursor-auto touch-pan-y overflow-y-auto overscroll-contain rounded-lg bg-white p-4 text-sm text-neutral-800 shadow-lg ring-1 ring-neutral-500/20 select-text pointer-coarse:inset-x-0 pointer-coarse:top-auto pointer-coarse:bottom-0 pointer-coarse:max-h-[45%] pointer-coarse:w-auto pointer-coarse:max-w-none pointer-coarse:rounded-b-none dark:bg-neutral-800 dark:text-neutral-200`}
+        >
+          {note.title && <h2 className="mb-2 font-semibold">{note.title}</h2>}
+          <Markdown text={note.text} />
+        </aside>
       )}
       <button
         type="button"
