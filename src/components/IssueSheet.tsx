@@ -11,9 +11,18 @@ import { ModeSwitch, type Mode } from './Switch'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
 import { ChevronIcon } from './icons'
+import { IssueLinks, type LinkPick } from './IssueLinks'
+import { SearchPalette } from './SearchPalette'
+import { blockerCandidates, parentCandidates, type IssueIndex } from '../lib/dependencies'
 
 interface Props {
   issue: Issue
+  /** Every issue the board knows, for the links. */
+  index: IssueIndex
+  onOpenIssue: (id: string) => void
+  /** Sets or clears the parent of `id`. */
+  onLink: (id: string, parent: string | null) => void
+  onAddBlocker: (title: string) => void
   onSave: (patch: { title?: string; body?: string }) => void
   onStatus: (s: Status) => void
   onPriority: (p: Priority | null) => void
@@ -32,6 +41,10 @@ interface Props {
 
 export function IssueSheet({
   issue,
+  index,
+  onOpenIssue,
+  onLink,
+  onAddBlocker,
   onSave,
   onStatus,
   onPriority,
@@ -48,6 +61,10 @@ export function IssueSheet({
   const [body, setBody] = useState(issue.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [mode, setMode] = useState<Mode>('edit')
+  const [linking, setLinking] = useState(false)
+  const [picking, setPicking] = useState<LinkPick | null>(null)
+  const links = useRef<HTMLElement>(null)
+  const linked = (issue.parent_id && index.byId.has(issue.parent_id)) || index.children.has(issue.id)
   const field = useRef<HTMLTextAreaElement>(null)
   /** Where the caret goes on the way to Edit. Unset when the sheet opens: no keyboard popping up on a phone. */
   const caret = useRef<number>(undefined)
@@ -120,7 +137,13 @@ export function IssueSheet({
   }, [mode])
 
   useEffect(() => {
+    if (linking) links.current?.scrollIntoView({ block: 'nearest' })
+  }, [linking])
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // The link palette, or a field of the sheet, has already dealt with this key.
+      if (picking || e.defaultPrevented) return
       // By key position: Alt + E types a dead key on a Mac.
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === 'KeyE') {
         e.preventDefault()
@@ -149,6 +172,7 @@ export function IssueSheet({
   })
 
   return (
+    <>
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center md:p-6">
       <div className={`absolute inset-0 bg-black/40 ${instant ? '' : 'animate-fade'}`} onClick={close} />
       <div
@@ -223,6 +247,17 @@ export function IssueSheet({
               )}
             </div>
           </div>
+          {(linked || linking) && (
+            <IssueLinks
+              ref={links}
+              issue={issue}
+              index={index}
+              onOpen={(id) => step(() => onOpenIssue(id))}
+              onUnlink={(id) => onLink(id, null)}
+              onAddBlocker={onAddBlocker}
+              onPick={setPicking}
+            />
+          )}
         </div>
         <div className="space-y-3 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
           <div className="grid grid-cols-4 gap-2">
@@ -267,33 +302,56 @@ export function IssueSheet({
             >
               {confirmDelete ? 'Confirm deletion' : 'Delete'}
             </button>
-            {onCopy && projects && projects.length > 0 && (
-              // Kept quiet on purpose: a plain grey label that opens the native project picker.
-              <select
-                value=""
-                onChange={(e) => onCopy(e.target.value, { title: title.trim() || issue.title, body })}
-                aria-label="Copy to another project"
-                className="ml-auto min-w-0 max-w-36 truncate bg-transparent py-1 text-right text-sm text-neutral-400 outline-none hover:text-neutral-600 dark:hover:text-neutral-300"
-              >
-                <option value="" disabled>
-                  Copy to…
-                </option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.id === issue.project_id ? `${p.name} (here)` : p.name}
+            <div className="ml-auto flex min-w-0 items-center gap-2">
+              {!linked && !linking && (
+                <button
+                  onClick={() => setLinking(true)}
+                  className="shrink-0 py-1 text-sm text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                >
+                  Link…
+                </button>
+              )}
+              {onCopy && projects && projects.length > 0 && (
+                // Kept quiet on purpose: a plain grey label that opens the native project picker.
+                <select
+                  value=""
+                  onChange={(e) => onCopy(e.target.value, { title: title.trim() || issue.title, body })}
+                  aria-label="Copy to another project"
+                  className="min-w-0 max-w-36 truncate bg-transparent py-1 text-right text-sm text-neutral-400 outline-none hover:text-neutral-600 dark:hover:text-neutral-300"
+                >
+                  <option value="" disabled>
+                    Copy to…
                   </option>
-                ))}
-              </select>
-            )}
-            <button
-              onClick={close}
-              className={`${onCopy && projects?.length ? '' : 'ml-auto'} shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900`}
-            >
-              Close
-            </button>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.id === issue.project_id ? `${p.name} (here)` : p.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                onClick={close}
+                className="shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
+    {picking && (
+      // Beside the sheet: its opening animation would otherwise position the palette.
+      <SearchPalette
+        issues={picking === 'blocker' ? blockerCandidates(issue, index) : parentCandidates(issue, index)}
+        onPick={(picked) => {
+          setPicking(null)
+          if (picking === 'blocker') onLink(picked.id, issue.id)
+          else onLink(issue.id, picked.id)
+        }}
+        onClose={() => setPicking(null)}
+      />
+    )}
+    </>
   )
 }

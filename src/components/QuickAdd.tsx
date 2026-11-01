@@ -3,8 +3,8 @@ import { useKeyboardInset } from '../hooks/useKeyboardInset'
 import { PlusIcon, SendIcon } from './icons'
 
 /** Desktop: inline field on top of the "To do" column, focused by typing anywhere on the board. */
-export const QuickAddInline = forwardRef<HTMLInputElement, { onAdd: (title: string) => void }>(function QuickAddInline(
-  { onAdd },
+export const QuickAddInline = forwardRef<HTMLInputElement, { onAdd: (title: string) => void; placeholder?: string }>(function QuickAddInline(
+  { onAdd, placeholder = 'New issue…' },
   ref,
 ) {
   const [value, setValue] = useState('')
@@ -20,8 +20,13 @@ export const QuickAddInline = forwardRef<HTMLInputElement, { onAdd: (title: stri
         ref={ref}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
-        placeholder="New issue…"
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return
+          // Keeps an open issue sheet from also closing.
+          e.preventDefault()
+          e.currentTarget.blur()
+        }}
+        placeholder={placeholder}
         className="w-full rounded-xl border border-dashed border-neutral-300 bg-transparent px-3 py-2.5 text-[15px] outline-none focus:border-solid focus:border-accent dark:border-neutral-700"
       />
     </form>

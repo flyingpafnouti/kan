@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
   DndContext,
@@ -14,9 +14,10 @@ import {
   type DragStartEvent,
   type UniqueIdentifier,
 } from '@dnd-kit/core'
-import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { STATUSES, doneAtFor, doneSince, isArchived, type Issue, type Status } from '../lib/types'
 import { between } from '../lib/position'
+import { indexIssues, linksOf, nestedOrder, positionAt, siblingsIn } from '../lib/dependencies'
 import { navigate, rememberProject } from '../lib/router'
 import { useIssues } from '../hooks/useIssues'
 import { useProject, useProjectList } from '../hooks/useProjects'
@@ -38,7 +39,8 @@ const isStatus = (id: UniqueIdentifier): id is Status => STATUSES.some((s) => s.
 
 export function Board({ projectId }: { projectId: string }) {
   const project = useProject(projectId)
-  const { issues, setIssues, column, add, update, setStatus, remove, copyTo } = useIssues(projectId)
+  const { issues, setIssues, column, add, addBlocker, update, setStatus, announceUnblocked, remove, copyTo } = useIssues(projectId)
+  const index = useMemo(() => indexIssues(issues ?? []), [issues])
   const projects = useProjectList()
   // Touch screens, tablets included, get one column at a time with tabs and swipes.
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
@@ -107,9 +109,9 @@ export function Board({ projectId }: { projectId: string }) {
     if (!a || !over) return
     const target = isStatus(over.id) ? over.id : find(over.id)?.status
     if (!target || target === a.status) return
-    const col = column(target)
+    const col = visible(target)
     const i = col.findIndex((x) => x.id === over.id)
-    const position = i < 0 ? between(col.at(-1)?.position, undefined) : between(col[i - 1]?.position, col[i].position)
+    const position = positionAt(col, a, i < 0 ? col.length : i)
     setIssues(
       (list) =>
         list?.map((x) => (x.id === a.id ? { ...x, status: target, position, done_at: doneAtFor(x, target) } : x)) ?? null,
@@ -123,15 +125,12 @@ export function Board({ projectId }: { projectId: string }) {
     if (!a || !start) return
     let position = a.position
     if (over && over.id !== active.id && !isStatus(over.id)) {
-      const col = column(a.status)
-      const from = col.findIndex((x) => x.id === a.id)
+      const col = visible(a.status)
       const to = col.findIndex((x) => x.id === over.id)
-      if (from >= 0 && to >= 0) {
-        const moved = arrayMove(col, from, to)
-        position = between(moved[to - 1]?.position, moved[to + 1]?.position)
-      }
+      if (to >= 0 && col.some((x) => x.id === a.id)) position = positionAt(col, a, to)
     }
     if (a.status !== start.status || position !== start.position) update(a.id, { status: a.status, position })
+    if (a.status === 'done' && start.status !== 'done') announceUnblocked(a.id)
   }
 
   function onDragCancel() {
@@ -151,13 +150,14 @@ export function Board({ projectId }: { projectId: string }) {
   const archived = column('done')
     .filter((x) => isArchived(x, now))
     .sort((a, b) => doneSince(b).localeCompare(doneSince(a)))
-  const visible = (status: Status) => (status === 'done' ? column('done').filter((x) => !isArchived(x, now)) : column(status))
+  const visible = (status: Status) =>
+    nestedOrder(status === 'done' ? column('done').filter((x) => !isArchived(x, now)) : column(status))
   const counts = { todo: column('todo').length, doing: column('doing').length, done: visible('done').length }
 
   function reorder(id: string, dir: -1 | 1) {
     const a = find(id)
     if (!a) return
-    const col = visible(a.status)
+    const col = siblingsIn(visible(a.status), id)
     const i = col.findIndex((x) => x.id === id)
     const neighbor = col[i + dir]
     if (!neighbor) return
@@ -182,6 +182,7 @@ export function Board({ projectId }: { projectId: string }) {
       setOpenId(id)
     },
     onStatus: setStatus,
+    links: (issue: Issue) => linksOf(issue, index),
     selected,
   }
 
@@ -277,7 +278,9 @@ export function Board({ projectId }: { projectId: string }) {
               />
             </div>
           )}
-          <DragOverlay>{dragStart && find(dragStart.id) && <IssueCard issue={find(dragStart.id)!} overlay />}</DragOverlay>
+          <DragOverlay>
+            {dragStart && find(dragStart.id) && <IssueCard issue={find(dragStart.id)!} links={linksOf(find(dragStart.id)!, index)} overlay />}
+          </DragOverlay>
         </DndContext>
       )}
 
@@ -300,6 +303,10 @@ export function Board({ projectId }: { projectId: string }) {
         <IssueSheet
           key={open.id}
           issue={open}
+          index={index}
+          onOpenIssue={step}
+          onLink={(id, parent_id) => update(id, { parent_id })}
+          onAddBlocker={(title) => addBlocker(open, title)}
           onSave={(patch) => update(open.id, patch)}
           onStatus={(s) => setStatus(open.id, s)}
           onPriority={(priority) => update(open.id, { priority })}

@@ -2,11 +2,13 @@ import { useState, type ReactNode } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Issue, Status } from '../lib/types'
+import { nestColumn, type CardLinks } from '../lib/dependencies'
 import { IssueCard, SortableIssueCard } from './IssueCard'
 import { ChevronIcon } from './icons'
 
 interface Props {
   status: Status
+  /** In displayed order: nestedOrder, since each child follows its parent here. */
   issues: Issue[]
   title?: string
   header?: ReactNode
@@ -17,11 +19,13 @@ interface Props {
   onStatus: (id: string, s: Status) => void
   /** Project name of each card, on the cross-project view. */
   projectName?: (issue: Issue) => string | undefined
+  /** Blockers and parent of each card. */
+  links?: (issue: Issue) => CardLinks | undefined
   /** Issue selected with the keyboard. */
   selected?: string | null
 }
 
-export function Column({ status, issues, title, header, empty, archived, onOpen, onStatus, projectName, selected }: Props) {
+export function Column({ status, issues, title, header, empty, archived, onOpen, onStatus, projectName, links, selected }: Props) {
   const { setNodeRef } = useDroppable({ id: status })
   const [showArchived, setShowArchived] = useState(false)
   return (
@@ -36,16 +40,23 @@ export function Column({ status, issues, title, header, empty, archived, onOpen,
       <SortableContext id={status} items={issues.map((x) => x.id)} strategy={verticalListSortingStrategy}>
         <ul ref={setNodeRef} className="flex min-h-24 flex-1 flex-col gap-2 pb-4">
           {issues.length === 0 && empty && <li className="py-12 text-center text-sm text-neutral-400">{empty}</li>}
-          {issues.map((issue) => (
-            <SortableIssueCard
-              key={issue.id}
-              issue={issue}
-              project={projectName?.(issue)}
-              selected={issue.id === selected}
-              onOpen={() => onOpen(issue.id)}
-              onStatus={(s) => onStatus(issue.id, s)}
-            />
-          ))}
+          {nestColumn(issues).map(({ issue, level, depth }) => {
+            const own = links?.(issue)
+            // The indentation already says which issue this one unblocks, until the cap flattens it.
+            const shown = level > 0 && level === depth && own ? { ...own, parent: undefined } : own
+            return (
+              <SortableIssueCard
+                key={issue.id}
+                issue={issue}
+                project={projectName?.(issue)}
+                links={shown}
+                depth={depth}
+                selected={issue.id === selected}
+                onOpen={() => onOpen(issue.id)}
+                onStatus={(s) => onStatus(issue.id, s)}
+              />
+            )
+          })}
           {archived && (
             // Inside the list so the drawer follows the cards instead of the bottom of the drop zone.
             <li className="pt-2">
@@ -68,6 +79,7 @@ export function Column({ status, issues, title, header, empty, archived, onOpen,
                       <IssueCard
                         issue={issue}
                         project={projectName?.(issue)}
+                        links={links?.(issue)}
                         onOpen={() => onOpen(issue.id)}
                         onStatus={(s) => onStatus(issue.id, s)}
                       />

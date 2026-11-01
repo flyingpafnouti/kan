@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { STATUSES, doneSince, isArchived, type Issue, type Status } from '../lib/types'
+import { indexIssues, linksOf, nestedOrder } from '../lib/dependencies'
 import { navigate } from '../lib/router'
 import { useIssues } from '../hooks/useIssues'
 import { useProjectList } from '../hooks/useProjects'
@@ -32,7 +33,8 @@ const SORT_KEY = 'all-issues-sort'
  * or by last edit, the latest on top.
  */
 export function AllIssues() {
-  const { issues, column, update, setStatus, remove, copyTo } = useIssues(null)
+  const { issues, column, addBlocker, update, setStatus, remove, copyTo } = useIssues(null)
+  const index = useMemo(() => indexIssues(issues ?? []), [issues])
   const projects = useProjectList()
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const [tab, setTab] = useState<Status>('todo')
@@ -85,7 +87,7 @@ export function AllIssues() {
     .filter((x) => isArchived(x, now))
     .sort((a, b) => doneSince(b).localeCompare(doneSince(a)))
   const visible = (status: Status) =>
-    (status === 'done' ? all('done').filter((x) => !isArchived(x, now)) : all(status)).sort(sort === 'recent' ? byRecent : byPriority)
+    nestedOrder((status === 'done' ? all('done').filter((x) => !isArchived(x, now)) : all(status)).sort(sort === 'recent' ? byRecent : byPriority))
   const counts = { todo: all('todo').length, doing: all('doing').length, done: visible('done').length }
   // No reordering here: the order is computed.
   const { selected, setSelected, sibling } = useIssueKeys({
@@ -103,6 +105,7 @@ export function AllIssues() {
     },
     onStatus: setStatus,
     projectName: name,
+    links: (issue: Issue) => linksOf(issue, index),
     selected,
   }
 
@@ -202,6 +205,10 @@ export function AllIssues() {
         <IssueSheet
           key={open.id}
           issue={open}
+          index={index}
+          onOpenIssue={step}
+          onLink={(id, parent_id) => update(id, { parent_id })}
+          onAddBlocker={(title) => addBlocker(open, title)}
           onSave={(patch) => update(open.id, patch)}
           onStatus={(s) => setStatus(open.id, s)}
           onPriority={(priority) => update(open.id, { priority })}

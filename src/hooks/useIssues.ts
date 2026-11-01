@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { hasSession, supabase } from '../lib/supabase'
 import { doneAtFor, type Issue, type Status } from '../lib/types'
@@ -9,7 +9,7 @@ import { readCache, writeCache } from '../lib/cache'
 import { enqueue, onReject, overlay, overlayRow } from '../lib/outbox'
 import { reloadOnRejoin, useRefetchOnFocus } from './useRefetchOnFocus'
 
-const COLUMNS = 'id, project_id, title, body, status, priority, position, created_at, updated_at, done_at'
+const COLUMNS = 'id, project_id, title, body, status, priority, position, created_at, updated_at, done_at, parent_id'
 
 /** Position on top of the project's "To do", from what this device has cached (0 when nothing is). */
 export function topOfTodo(projectId: string) {
@@ -28,6 +28,9 @@ export function useIssues(projectId: string | null) {
     const cached = readCache<Issue[]>(cacheKey)
     return cached && overlay('issues', cached, belongs)
   })
+  // For the undo callbacks, which outlive the render that created them.
+  const current = useRef(issues)
+  current.current = issues
 
   const load = useCallback(async () => {
     const query = supabase.from('issues').select(COLUMNS)
@@ -104,7 +107,27 @@ export function useIssues(projectId: string | null) {
     [projectId, column],
   )
 
-  const update = useCallback((id: string, patch: Partial<Pick<Issue, 'title' | 'body' | 'status' | 'priority' | 'position'>>) => {
+  /** New issue on top of the project's "To do", which `parent` then waits for. Works on All issues, unlike add. */
+  const addBlocker = useCallback((parent: Issue, title: string) => {
+    const now = new Date().toISOString()
+    const row: Issue = {
+      id: uuid(),
+      project_id: parent.project_id,
+      title,
+      body: '',
+      status: 'todo',
+      priority: null,
+      position: topOfTodo(parent.project_id),
+      created_at: now,
+      updated_at: now,
+      done_at: null,
+      parent_id: parent.id,
+    }
+    setIssues((list) => [...(list ?? []), row])
+    enqueue({ table: 'issues', id: row.id, kind: 'upsert', data: { ...row } })
+  }, [])
+
+  const update = useCallback((id: string, patch: Partial<Pick<Issue, 'title' | 'body' | 'status' | 'priority' | 'position' | 'parent_id'>>) => {
     const updated_at = new Date().toISOString()
     setIssues(
       (list) =>
@@ -117,14 +140,25 @@ export function useIssues(projectId: string | null) {
     enqueue({ table: 'issues', id, kind: 'update', data: patch })
   }, [])
 
+  /** To call when `id` has just entered "done": says so if that was the last issue its parent waited for. */
+  const announceUnblocked = useCallback((id: string) => {
+    const list = current.current ?? []
+    const parentId = list.find((x) => x.id === id)?.parent_id
+    const parent = parentId ? list.find((x) => x.id === parentId) : undefined
+    if (!parent || parent.status === 'done') return
+    if (list.some((x) => x.parent_id === parent.id && x.id !== id && x.status !== 'done')) return
+    toast(`${parent.title} is unblocked`)
+  }, [])
+
   /** Change status and put the issue on top of its new column, within its own project. */
   const setStatus = useCallback(
     (id: string, status: Status) => {
-      const project = issues?.find((x) => x.id === id)?.project_id
-      const top = column(status).find((x) => x.id !== id && x.project_id === project)
+      const issue = issues?.find((x) => x.id === id)
+      const top = column(status).find((x) => x.id !== id && x.project_id === issue?.project_id)
       update(id, { status, position: between(undefined, top?.position) })
+      if (status === 'done' && issue?.status !== 'done') announceUnblocked(id)
     },
-    [update, column, issues],
+    [update, column, issues, announceUnblocked],
   )
 
   /** New issue on top of `target`'s "To do" with the same title, notes and priority; `text` is the latest text. */
@@ -149,20 +183,36 @@ export function useIssues(projectId: string | null) {
     [projectId],
   )
 
-  /** Put a deleted issue back as it was (same id, position and dates). */
+  /** Put a deleted issue back as it was (same id, position and dates), unless its parent is gone: the server would refuse it. */
   const restore = useCallback((issue: Issue) => {
-    setIssues((list) => (list && !list.some((x) => x.id === issue.id) ? [...list, issue] : list))
-    enqueue({ table: 'issues', id: issue.id, kind: 'upsert', data: { ...issue } })
+    const orphan = issue.parent_id && !current.current?.some((x) => x.id === issue.parent_id)
+    const row = orphan ? { ...issue, parent_id: null } : issue
+    setIssues((list) => (list && !list.some((x) => x.id === row.id) ? [...list, row] : list))
+    enqueue({ table: 'issues', id: row.id, kind: 'upsert', data: { ...row } })
   }, [])
 
   const remove = useCallback(
     (issue: Issue) => {
-      setIssues((list) => list?.filter((x) => x.id !== issue.id) ?? null)
+      // The foreign key unlinks them on the server: mirrored here, and undone with the deletion.
+      const blockers = (current.current ?? []).filter((x) => x.parent_id === issue.id).map((x) => x.id)
+      setIssues(
+        (list) =>
+          list?.filter((x) => x.id !== issue.id).map((x) => (x.parent_id === issue.id ? { ...x, parent_id: null } : x)) ?? null,
+      )
       enqueue({ table: 'issues', id: issue.id, kind: 'delete' })
-      toast('Issue deleted', { duration: 10_000, action: { label: 'Undo', run: () => restore(issue) } })
+      toast('Issue deleted', {
+        duration: 10_000,
+        action: {
+          label: 'Undo',
+          run: () => {
+            restore(issue)
+            blockers.forEach((id) => update(id, { parent_id: issue.id }))
+          },
+        },
+      })
     },
-    [restore],
+    [restore, update],
   )
 
-  return { issues, setIssues, column, add, update, setStatus, remove, copyTo }
+  return { issues, setIssues, column, add, addBlocker, update, setStatus, announceUnblocked, remove, copyTo }
 }

@@ -3,6 +3,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { PRIORITIES, type Issue, type Status } from '../lib/types'
 import { StatusIcon } from './StatusIcon'
 import { hideDiagrams } from '../lib/format'
+import type { CardLinks } from '../lib/dependencies'
 
 const NEXT: Record<Status, Status> = { todo: 'doing', doing: 'done', done: 'todo' }
 
@@ -15,9 +16,15 @@ interface Props {
   project?: string
   /** Keyboard selection. */
   selected?: boolean
+  /** Blockers and parent, absent on an issue without links. */
+  links?: CardLinks
+  /** Levels of indentation under the parent, in a column. */
+  depth?: number
 }
 
-export function IssueCard({ issue, onOpen, onStatus, overlay, project, selected }: Props) {
+const INDENT_PX = 16
+
+export function IssueCard({ issue, onOpen, onStatus, overlay, project, selected, links }: Props) {
   const done = issue.status === 'done'
   const priority = PRIORITIES.find((p) => p.id === issue.priority)
   return (
@@ -44,6 +51,12 @@ export function IssueCard({ issue, onOpen, onStatus, overlay, project, selected 
         </p>
         {issue.body && <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{hideDiagrams(issue.body)}</p>}
         {project && <p className="mt-1.5 truncate text-xs font-medium text-accent/80">{project}</p>}
+        {links && links.total > 0 && (
+          <p className={`mt-1.5 text-xs font-medium tabular-nums ${links.done < links.total ? 'text-neutral-500' : 'text-accent'}`}>
+            {links.done < links.total ? 'Blocked' : 'Ready'} {links.done}/{links.total}
+          </p>
+        )}
+        {links?.parent && <p className="mt-1.5 truncate text-xs text-neutral-500">Unblocks {links.parent}</p>}
       </button>
     </div>
   )
@@ -54,7 +67,7 @@ export function SortableIssueCard(props: Props) {
   return (
     <li
       ref={setNodeRef}
-      style={{ transform: CSS.Translate.toString(transform), transition }}
+      style={{ transform: CSS.Translate.toString(transform), transition, marginLeft: (props.depth ?? 0) * INDENT_PX }}
       className={`touch-manipulation ${isDragging ? 'opacity-40' : ''}`}
       {...attributes}
       {...listeners}

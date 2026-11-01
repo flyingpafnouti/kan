@@ -19,6 +19,12 @@ export const PlusIcon = (p: P) => (
   </svg>
 )
 
+export const CloseIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+)
+
 export const BackIcon = (p: P) => (
   <svg {...base} {...p}>
     <path d="m15 18-6-6 6-6" />

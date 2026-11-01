@@ -31,7 +31,10 @@ create table public.issues (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   -- Set by issues_done_at when the issue enters "done", cleared when it leaves.
-  done_at    timestamptz
+  done_at    timestamptz,
+  -- The larger issue this one unblocks, in the same project (enforced by the app).
+  parent_id  uuid references public.issues on delete set null,
+  constraint issues_not_own_parent check (parent_id <> id)
 );
 
 -- Loose ideas, not tied to a project yet; one can be turned into an issue.
@@ -45,6 +48,7 @@ create table public.notes (
 );
 
 create index issues_project_idx on public.issues (project_id, status, position);
+create index issues_parent_idx on public.issues (parent_id) where parent_id is not null;
 create index projects_user_idx on public.projects (user_id, position);
 create index notes_user_idx on public.notes (user_id, created_at);
 create index project_members_user_idx on public.project_members (user_id);

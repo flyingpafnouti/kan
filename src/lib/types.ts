@@ -62,6 +62,8 @@ export interface Issue {
   updated_at: string
   /** When the issue entered "done". Missing on rows cached before the column existed. */
   done_at?: string | null
+  /** The larger issue this one unblocks, in the same project. Missing on rows cached before the column existed. */
+  parent_id?: string | null
 }
 
 /** Loose idea, not tied to a project; can become an issue. */
