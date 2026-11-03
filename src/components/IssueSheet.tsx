@@ -153,8 +153,17 @@ export function IssueSheet({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // The link palette, or a field of the sheet, has already dealt with this key.
-      if (picking || e.defaultPrevented) return
+      if (picking) return
+      // Alt + ← / → moves the issue to the neighbouring column, like on the board. Checked before defaultPrevented:
+      // the global guard of main.tsx has already prevented it, to keep the browser history still.
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.isComposing) {
+        e.preventDefault()
+        const target = STATUSES[STATUSES.findIndex((s) => s.id === issue.status) + (e.key === 'ArrowLeft' ? -1 : 1)]
+        if (target) onStatus(target.id)
+        return
+      }
+      // A field of the sheet has already dealt with this key.
+      if (e.defaultPrevented) return
       // By key position: Alt + E types a dead key on a Mac.
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === 'KeyE') {
         e.preventDefault()
@@ -164,13 +173,6 @@ export function IssueSheet({
       if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.isComposing) {
         e.preventDefault()
         return step(e.key === 'ArrowUp' ? onPrev : onNext)
-      }
-      // Alt + ← / → moves the issue to the neighbouring column, like on the board.
-      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.isComposing) {
-        e.preventDefault()
-        const target = STATUSES[STATUSES.findIndex((s) => s.id === issue.status) + (e.key === 'ArrowLeft' ? -1 : 1)]
-        if (target) onStatus(target.id)
-        return
       }
       // Escape, or Ctrl / ⌘ + Enter from the text fields.
       if (e.key !== 'Escape' && !(e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing)) return

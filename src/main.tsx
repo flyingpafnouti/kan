@@ -12,6 +12,7 @@ if (!location.hash || location.hash === '#') {
 }
 
 // Alt + ← / → move issues between columns: never let them go back or forward in the browser history.
+// Registered first, so later bubble listeners see the event as prevented: they must check these keys before defaultPrevented.
 addEventListener('keydown', (e) => {
   if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) e.preventDefault()
 })
