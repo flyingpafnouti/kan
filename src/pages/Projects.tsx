@@ -68,6 +68,10 @@ export function Projects({
       } else if (e.key === 'Enter' && i >= 0) {
         e.preventDefault()
         navigate(selected === 'all' ? { name: 'all' } : { name: 'board', projectId: selected! })
+      } else if (e.key === ' ' && !typed) {
+        // Space continues a name being typed, otherwise opens all issues.
+        e.preventDefault()
+        navigate({ name: 'all' })
       } else if (e.key === 'Escape' && (i >= 0 || typed)) {
         setSelected(null)
         typeAhead('')

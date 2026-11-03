@@ -12,6 +12,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
       ['/', 'Search projects, issues and notes'],
       ['Tab', 'Search power, in the search'],
       ['Enter', 'Open'],
+      ['Space', 'All issues'],
     ],
   },
   {
