@@ -215,7 +215,7 @@ alter publication supabase_realtime add table public.projects, public.project_me
 
 -- Images of the notes: private, each user reaches only their own folder (<user id>/<file>).
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('note-images', 'note-images', false, 2097152, array['image/webp', 'image/jpeg']);
+values ('note-images', 'note-images', false, 2097152, array['image/webp', 'image/jpeg', 'application/gzip']);
 
 create policy "read own note images" on storage.objects
   for select to authenticated

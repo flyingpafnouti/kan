@@ -243,7 +243,29 @@
   background: color-mix(in oklab, var(--color-neutral-500) 12%, transparent);
   cursor: pointer;
 }
+.drawing-edit {
+  display: none;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0.35rem;
+  border-radius: 0.375rem;
+  color: var(--color-neutral-600);
+  background: color-mix(in oklab, white 80%, transparent);
+  cursor: pointer;
+}
+.drawings-editable .note-image:hover .drawing-edit {
+  display: block;
+}
+@media (hover: none) {
+  .drawings-editable .drawing-edit {
+    display: block;
+  }
+}
 .mermaid-edit:hover,
+.drawing-edit:hover,
 .code-copy:hover {
   color: var(--color-accent);
 }

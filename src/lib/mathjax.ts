@@ -57,3 +57,24 @@ export async function typeset(root: HTMLElement) {
     el.replaceChildren(await convert(el.textContent ?? '', el.classList.contains('math-display')))
   }
 }
+
+/**
+ * A formula as a standalone SVG data URL, for the drawings: its glyphs in the given color,
+ * its size in pixels for that font size. Throws with MathJax's message on a TeX error.
+ */
+export async function texToSvg(tex: string, color: string, fontSize: number) {
+  const svg = (await convert(tex, true)).querySelector('svg')
+  if (!svg) throw new Error('No formula')
+  const error = svg.querySelector('[data-mjx-error]')
+  if (error) throw new Error(error.getAttribute('data-mjx-error') || 'TeX error')
+  // The view box is in thousandths of an em.
+  const [, , w, h] = svg.getAttribute('viewBox')!.split(/\s+/).map(Number)
+  const width = Math.ceil((w / 1000) * fontSize)
+  const height = Math.ceil((h / 1000) * fontSize)
+  svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  svg.setAttribute('width', String(width))
+  svg.setAttribute('height', String(height))
+  svg.removeAttribute('style')
+  const text = new XMLSerializer().serializeToString(svg).replaceAll('currentColor', color)
+  return { url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`, width, height }
+}

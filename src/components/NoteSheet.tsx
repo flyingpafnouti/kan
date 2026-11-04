@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent } from 'react'
 import type { Note, NoteKind, Project } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
-import { imageFiles, prepareImage, removeImageLink, setImageWidth } from '../lib/images'
+import { imageFiles, prepareImage, removeImageLink, replaceImagePath, setImageWidth } from '../lib/images'
+import { loadDrawing, prepareDrawing, type DrawingData } from '../lib/drawings'
 import { toast } from '../lib/toast'
 import { ResizableMarkdown } from './Markdown'
 import { AutoTextarea } from './AutoTextarea'
 import { ModeSwitch, type Mode } from './Switch'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
-import { GripIcon } from './icons'
+import { DrawIcon, GripIcon } from './icons'
 import { KindSwitch } from './KindSwitch'
 
 interface Props {
@@ -28,6 +29,9 @@ interface Props {
 }
 
 type Size = { w: number; h: number }
+
+/** fabric comes with the editor, only once a drawing is opened. */
+const DrawingEditor = lazy(() => import('./DrawingEditor'))
 
 const SIZE_KEY = 'note-size'
 const MIN_W = 320
@@ -72,6 +76,8 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
   const field = useRef<HTMLTextAreaElement>(null)
   /** Links of the images on their way to the server. */
   const pending = useRef(new Set<string>())
+  /** The drawing being edited: a new one, or the path of the one it replaces. */
+  const [drawing, setDrawing] = useState<{ path?: string; data?: DrawingData } | null>(null)
 
   // Saved once, on close, rather than while typing. An emptied note is not saved (the server refuses it)
   // and goes away on close.
@@ -147,6 +153,48 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
     for (const file of files) await attachImage(file)
   }
 
+  const openDrawing = async (path?: string) => {
+    if (!path) return setDrawing({})
+    if (!navigator.onLine) return toast('Drawings need a connection')
+    try {
+      setDrawing({ path, data: await loadDrawing(path) })
+    } catch (e) {
+      console.warn(e)
+      toast('Could not open the drawing')
+    }
+  }
+
+  /**
+   * A new drawing goes in like an image. An edited one keeps its old link, which still shows,
+   * until the new files are on the server: the link then points to them, with the same width.
+   */
+  const saveDrawing = async (preview: HTMLCanvasElement, width: number, data: DrawingData) => {
+    const replaced = drawing?.path
+    setDrawing(null)
+    if (!navigator.onLine) return toast('Drawings need a connection')
+    setUploading((n) => n + 1)
+    let link: string | undefined
+    try {
+      const prepared = await prepareDrawing(preview, width, data)
+      if (replaced) {
+        await prepared.send()
+        setBody((b) => replaceImagePath(b, replaced, prepared.path))
+        return
+      }
+      link = prepared.link
+      pending.current.add(link)
+      insertImage(link)
+      await prepared.send()
+    } catch (e) {
+      console.warn(e)
+      if (link) setBody((b) => removeImageLink(b, link!))
+      toast('Could not save the drawing')
+    } finally {
+      if (link) pending.current.delete(link)
+      setUploading((n) => n - 1)
+    }
+  }
+
   useEffect(() => {
     if (mode !== 'edit') return
     field.current?.focus()
@@ -156,6 +204,7 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
   // On the document: nothing has the focus when the sheet just opened on a rendered note.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
+      if (drawing) return
       const files = imageFiles(e.clipboardData)
       // Word and Excel also copy a picture of the text: the text is what was meant.
       if (!files.length || e.clipboardData?.getData('text/plain').trim()) return
@@ -195,6 +244,8 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // The drawing editor has its own keys.
+      if (drawing) return
       // By key position: Alt + E types a dead key on a Mac.
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === 'KeyE') {
         e.preventDefault()
@@ -211,6 +262,11 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center md:p-6">
+      {drawing && (
+        <Suspense fallback={null}>
+          <DrawingEditor initial={drawing.data} onSave={saveDrawing} onCancel={() => setDrawing(null)} />
+        </Suspense>
+      )}
       <div className="absolute inset-0 animate-fade bg-black/40" onClick={close} />
       <div
         ref={panel}
@@ -241,6 +297,10 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
                 if (uploading) return toast('Image still uploading')
                 setBody((b) => setImageWidth(b, path, width))
               }}
+              onEditDrawing={(path) => {
+                if (uploading) return toast('Image still uploading')
+                void openDrawing(path)
+              }}
             />
           ) : (
             <AutoTextarea
@@ -263,6 +323,15 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
                   : `Edited ${formatDate(note.updated_at)}`}
             </p>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Draw"
+                title="Draw"
+                onClick={() => void openDrawing()}
+                className="rounded-full p-1.5 text-neutral-300 transition hover:text-neutral-500 dark:text-neutral-600 dark:hover:text-neutral-400"
+              >
+                <DrawIcon width={16} height={16} />
+              </button>
               <ModeSwitch label="Note mode" value={mode} onChange={setMode} />
               {dictationSupported && (
                 <DictationButton dictation={dictation} label="Dictate">

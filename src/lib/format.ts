@@ -1,5 +1,5 @@
 import MarkdownIt, { type StateBlock, type StateInline } from 'markdown-it'
-import { imagePath, readyImageUrl } from './images'
+import { DRAWING, imagePath, readyImageUrl } from './images'
 
 /*
  * Markdown for the issue and note bodies. Raw HTML is escaped, so the output is safe to inject.
@@ -132,11 +132,16 @@ md.renderer.rules.image = (tokens, i, options, env, self) => {
   const path = imagePath(String(tokens[i].attrGet('src')))
   if (!path) return image(tokens, i, options, env, self)
   const width = tokens[i].content.match(/\|(\d{1,4})$/)?.[1]
+  const drawing = tokens[i].content.split('|')[0] === DRAWING
   const url = readyImageUrl(path)
+  // The pencil only shows where drawings can be edited (CSS, .drawings-editable).
+  const edit = drawing
+    ? `<button type="button" class="drawing-edit" title="Edit drawing" aria-label="Edit drawing">${PENCIL}</button>`
+    : ''
   return (
-    `<span class="note-image"${width ? ` style="width:${width}px"` : ''}>` +
-    `<img data-note-image="${escape(path)}"${url ? ` src="${escape(url)}"` : ''} alt="Image" loading="lazy">` +
-    '<span class="image-grip" data-grip title="Drag to resize, double-click to reset"></span></span>'
+    `<span class="note-image"${width ? ` style="width:${width}px"` : ''}${drawing ? ' data-drawing' : ''}>` +
+    `<img data-note-image="${escape(path)}"${url ? ` src="${escape(url)}"` : ''} alt="${drawing ? 'Drawing' : 'Image'}" loading="lazy">` +
+    `${edit}<span class="image-grip" data-grip title="Drag to resize, double-click to reset"></span></span>`
   )
 }
 

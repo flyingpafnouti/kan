@@ -396,18 +396,21 @@ function diagramAt(target: HTMLElement) {
 
 /**
  * Rendered Markdown whose images and diagrams open full screen on a click. Images resize from a grip
- * in their corner, where a double-click resets them. With onEditLine, diagrams get a pencil towards their source.
+ * in their corner, where a double-click resets them. With onEditLine, diagrams get a pencil towards their source,
+ * and with onEditDrawing, drawings get a pencil that opens them in the editor.
  */
 export function ResizableMarkdown({
   text,
   className,
   onImageWidth,
   onEditLine,
+  onEditDrawing,
 }: {
   text: string
   className: string
   onImageWidth: (path: string, width: number | null) => void
   onEditLine?: (line: number) => void
+  onEditDrawing?: (path: string) => void
 }) {
   const drag = useRef<{ x: number; width: number; limit: number; frame: HTMLElement; moved: boolean }>(undefined)
   const [zoom, setZoom] = useState<string | null>(null)
@@ -421,12 +424,14 @@ export function ResizableMarkdown({
       <Markdown
         text={text}
         diagrams={onEditLine ? 'editable' : 'shown'}
-        className={`resizable ${className}`}
+        className={`resizable ${onEditDrawing ? 'drawings-editable ' : ''}${className}`}
         onClick={(e) => {
           const target = e.target as HTMLElement
           if (target.closest('.mermaid-edit')) {
             return onEditLine?.(Number(target.closest<HTMLElement>('[data-line]')!.dataset.line))
           }
+          const drawing = target.closest<HTMLElement>('.drawing-edit')
+          if (drawing) return onEditDrawing?.(pathOf(drawing.parentElement!))
           const src = target.matches('.note-image img') && target.getAttribute('src')
           if (src) setZoom(src)
           setDiagram(diagramAt(target))
