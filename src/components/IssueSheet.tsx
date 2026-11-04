@@ -3,6 +3,7 @@ import { PRIORITIES, STATUSES, type Issue, type Priority, type Project, type Sta
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
+import { storedUserId } from '../lib/supabase'
 import { setImageWidth } from '../lib/images'
 import { StatusIcon } from './StatusIcon'
 import { AutoTextarea } from './AutoTextarea'
@@ -76,6 +77,9 @@ export function IssueSheet({
   const saved = useRef({ title: issue.title, body: issue.body })
   const latest = useRef({ title, body })
   latest.current = { title, body }
+  // Only on shared projects, and only once the server knows the author.
+  const shared = (projects?.find((p) => p.id === issue.project_id)?.members ?? 1) > 1
+  const editor = shared && issue.updated_by ? (issue.updated_by === storedUserId() ? ' by me' : ' by others') : ''
   /** Deleted: nothing left to save. */
   const ended = useRef(false)
   const unmounted = useRef(false)
@@ -251,7 +255,7 @@ export function IssueSheet({
           )}
           <div className="flex items-center justify-between gap-2 py-2">
             <p className="text-xs text-neutral-400">
-              {dictation.state === 'transcribing' ? 'Transcribing…' : `Edited ${formatDate(issue.updated_at)}`}
+              {dictation.state === 'transcribing' ? 'Transcribing…' : `Edited ${formatDate(issue.updated_at)}${editor}`}
             </p>
             <div className="flex items-center gap-2">
               <ModeSwitch label="Issue mode" value={mode} onChange={(m) => changeMode(m)} />

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import { hasSession, supabase } from '../lib/supabase'
+import { hasSession, storedUserId, supabase } from '../lib/supabase'
 import { doneAtFor, type Issue, type Status } from '../lib/types'
 import { between, byPosition } from '../lib/position'
 import { uuid } from '../lib/id'
@@ -9,7 +9,7 @@ import { readCache, writeCache } from '../lib/cache'
 import { enqueue, onReject, overlay, overlayRow } from '../lib/outbox'
 import { reloadOnRejoin, useRefetchOnFocus } from './useRefetchOnFocus'
 
-const COLUMNS = 'id, project_id, title, body, status, priority, position, created_at, updated_at, done_at, parent_id'
+const COLUMNS = 'id, project_id, title, body, status, priority, position, created_at, updated_at, updated_by, done_at, parent_id'
 
 /** Position on top of the project's "To do", from what this device has cached (0 when nothing is). */
 export function topOfTodo(projectId: string) {
@@ -133,7 +133,7 @@ export function useIssues(projectId: string | null) {
       (list) =>
         list?.map((x) =>
           x.id === id
-            ? { ...x, ...patch, updated_at, done_at: patch.status ? doneAtFor(x, patch.status) : x.done_at }
+            ? { ...x, ...patch, updated_at, updated_by: storedUserId(), done_at: patch.status ? doneAtFor(x, patch.status) : x.done_at }
             : x,
         ) ?? null,
     )

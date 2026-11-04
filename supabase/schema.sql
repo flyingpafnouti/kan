@@ -30,6 +30,8 @@ create table public.issues (
   position   float8 not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  -- Who made the last change, set by issues_updated_by.
+  updated_by uuid default auth.uid() references auth.users on delete set null,
   -- Set by issues_done_at when the issue enters "done", cleared when it leaves.
   done_at    timestamptz,
   -- The larger issue this one unblocks, in the same project (enforced by the app).
@@ -62,6 +64,17 @@ end $$;
 
 create trigger issues_touch before update on public.issues
 for each row execute function public.touch_updated_at();
+
+-- The client cannot claim another author: the session's user wins.
+create function public.issues_updated_by() returns trigger
+language plpgsql as $$
+begin
+  new.updated_by = coalesce(auth.uid(), new.updated_by);
+  return new;
+end $$;
+
+create trigger issues_updated_by before insert or update on public.issues
+for each row execute function public.issues_updated_by();
 
 create trigger notes_touch before update on public.notes
 for each row execute function public.touch_updated_at();

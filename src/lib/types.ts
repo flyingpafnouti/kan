@@ -47,6 +47,8 @@ export interface Project {
   updated_at?: string
   /** Secret of the invite link, null until shared. Missing on rows cached before sharing existed. */
   invite_token?: string | null
+  /** More than one means the project is shared. Missing where the list does not count them. */
+  members?: number
 }
 
 export interface Issue {
@@ -60,6 +62,8 @@ export interface Issue {
   position: number
   created_at: string
   updated_at: string
+  /** Author of the last change (issues_updated_by trigger). Missing or null on rows changed before the column existed. */
+  updated_by?: string | null
   /** When the issue entered "done". Missing on rows cached before the column existed. */
   done_at?: string | null
   /** The larger issue this one unblocks, in the same project. Missing on rows cached before the column existed. */

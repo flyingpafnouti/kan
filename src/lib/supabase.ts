@@ -27,6 +27,15 @@ export function storedAccessToken(): string | null {
   }
 }
 
+/** Signed-in user, read synchronously from the stored session. */
+export function storedUserId(): string | null {
+  try {
+    return JSON.parse(localStorage.getItem(storageKey) ?? 'null')?.user?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 /** False while the session cannot be confirmed (offline with an expired token): requests would go out anonymously. */
 export async function hasSession() {
   const { data } = await supabase.auth.getSession()

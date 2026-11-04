@@ -182,7 +182,7 @@ export function useProject(id: string) {
   return project
 }
 
-const LIST_COLUMNS = 'id, name, position, created_at'
+const LIST_COLUMNS = 'id, name, position, created_at, project_members(count)'
 
 /**
  * Names and order of the projects, without the counts of useProjects: the cached list, fetched on mount and when
@@ -197,7 +197,12 @@ export function useProjectList() {
   const load = useCallback(async () => {
     if (!(await hasSession())) return
     const { data, error } = await supabase.from('projects').select(LIST_COLUMNS).order('position')
-    if (!error) setList(overlay('projects', data))
+    if (error) return
+    const rows = data.map(({ project_members, ...p }) => ({
+      ...p,
+      members: (project_members as unknown as { count: number }[])[0]?.count ?? 1,
+    }))
+    setList(overlay('projects', rows))
   }, [])
 
   useEffect(() => {
@@ -208,9 +213,12 @@ export function useProjectList() {
       .on<Project>('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (p) => {
         if (p.eventType === 'DELETE') return setList((ps) => ps?.filter((x) => x.id !== p.old.id) ?? null)
         const { id, name, position, created_at } = p.new
-        setList((ps) =>
-          [...(ps ?? []).filter((x) => x.id !== id), { id, name, position, created_at }].sort((a, b) => a.position - b.position),
-        )
+        setList((ps) => {
+          const members = ps?.find((x) => x.id === id)?.members
+          return [...(ps ?? []).filter((x) => x.id !== id), { id, name, position, created_at, members }].sort(
+            (a, b) => a.position - b.position,
+          )
+        })
       })
       .subscribe(reloadOnRejoin(load))
     return () => {
