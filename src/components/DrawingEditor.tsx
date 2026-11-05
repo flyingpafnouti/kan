@@ -54,7 +54,7 @@ const VISION_SIDE = 1536
  * in a few colors, on a white sheet. Saving gives a preview cropped to the drawing and its objects to edit it again.
  */
 
-type Tool = 'select' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'pencil' | 'text' | 'math'
+type Tool = 'select' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'elbow' | 'pencil' | 'text' | 'math'
 type Point = { x: number; y: number }
 
 const COLORS = ['#1e1e1e', '#e03131', '#1971c2', '#2f9e44', '#f08c00', '#7048e8']
@@ -85,7 +85,7 @@ const PAD = 16
 const MIN_DRAG = 4
 
 /** One key per tool, as in Excalidraw where they exist there. */
-const TOOL_KEYS: Record<string, Tool> = { v: 'select', p: 'pencil', r: 'rect', o: 'ellipse', l: 'line', a: 'arrow', t: 'text', m: 'math' }
+const TOOL_KEYS: Record<string, Tool> = { v: 'select', p: 'pencil', r: 'rect', o: 'ellipse', l: 'line', a: 'arrow', e: 'elbow', t: 'text', m: 'math' }
 const keyOf = (tool: Tool) => Object.keys(TOOL_KEYS).find((k) => TOOL_KEYS[k] === tool)!.toUpperCase()
 
 /** With Shift, a square or a circle: the longer side for both, towards where the pointer went. */
@@ -110,6 +110,7 @@ function makeShape(tool: Tool, a: Point, end: Point, color: string, width: numbe
   if (tool === 'rect') return new Rect({ ...box, width: w, height: h, rx: 4, ry: 4 })
   if (tool === 'ellipse') return new Ellipse({ ...box, rx: w / 2, ry: h / 2 })
   if (tool === 'line' || tool === 'arrow') return makeConnector(tool, a, b, color, width)
+  if (tool === 'elbow') return makeConnector('arrow', a, b, color, width, {})
   return null
 }
 
@@ -166,7 +167,7 @@ function applyTool(c: Canvas, tool: Tool) {
 }
 
 /** Tools whose drag can start from, or end on, an anchor. */
-const usesAnchors = (tool: Tool) => tool === 'select' || tool === 'line' || tool === 'arrow'
+const usesAnchors = (tool: Tool) => tool === 'select' || tool === 'line' || tool === 'arrow' || tool === 'elbow'
 
 /** A formula: the SVG MathJax drew, with its TeX source and color to draw it again. */
 type MathImage = FabricImage & { tex: string; texColor: string }
@@ -379,7 +380,7 @@ export default function DrawingEditor({
     let start: Point | null = null
     let draft: FabricObject | null = null
     /** The drag runs from an anchor, or ends near one: it draws a connector tied to the shapes. */
-    let link: { kind: 'line' | 'arrow'; from?: { object: FabricObject; side: Side } } | null = null
+    let link: { kind: 'line' | 'arrow'; elbow?: boolean; from?: { object: FabricObject; side: Side } } | null = null
     /** The object whose anchors show, and the anchor the pointer is on. */
     let hover: { object: FabricObject; hot: Side | null } | null = null
     let pressed = false
@@ -412,7 +413,7 @@ export default function DrawingEditor({
       const { tool, color, fontSize } = current.current
       if (usesAnchors(tool) && hover?.hot != null) {
         const from = { object: hover.object, side: hover.hot }
-        link = { kind: tool === 'line' ? 'line' : 'arrow', from }
+        link = { kind: tool === 'line' ? 'line' : 'arrow', elbow: tool === 'elbow', from }
         const a = anchorAt(c, scenePoint, ANCHOR_HIT)
         start = a ? { x: a.point.x, y: a.point.y } : { x: scenePoint.x, y: scenePoint.y }
         return
@@ -433,6 +434,7 @@ export default function DrawingEditor({
       }
       if (tool === 'select' || tool === 'pencil') return
       if (tool === 'line' || tool === 'arrow') link = { kind: tool }
+      if (tool === 'elbow') link = { kind: 'arrow', elbow: true }
       start = { x: scenePoint.x, y: scenePoint.y }
     })
     c.on('mouse:move', ({ scenePoint, e }: TPointerEventInfo) => {
@@ -446,8 +448,8 @@ export default function DrawingEditor({
       }
       if (draft) c.remove(draft)
       if (link) {
-        const end = connectorEnd(c, new FabricPoint(start.x, start.y), scenePoint, e.shiftKey, link.from?.object)
-        draft = makeConnector(link.kind, start, end.point, color, width)
+        const end = connectorEnd(c, new FabricPoint(start.x, start.y), scenePoint, e.shiftKey && !link.elbow, link.from?.object)
+        draft = makeConnector(link.kind, start, end.point, color, width, link.elbow ? { sa: link.from?.side, sb: end.bind?.side } : undefined)
         hover = end.bind ? { object: end.bind.object, hot: end.bind.side } : null
       } else draft = makeShape(tool, start, scenePoint, color, width, e.shiftKey)
       if (draft) c.add(draft)
@@ -477,7 +479,7 @@ export default function DrawingEditor({
         made.setCoords()
         if (ends) {
           ensureId(made)
-          const end = connectorEnd(c, origin, scenePoint, e.shiftKey, ends.from?.object).bind
+          const end = connectorEnd(c, origin, scenePoint, e.shiftKey && !ends.elbow, ends.from?.object).bind
           Object.assign(made, {
             from: ends.from ? { id: ensureId(ends.from.object), side: ends.from.side } : undefined,
             to: end ? { id: ensureId(end.object), side: end.side } : undefined,
@@ -785,6 +787,7 @@ export default function DrawingEditor({
         {toolButton('ellipse', 'Ellipse', <ellipse cx="12" cy="12" rx="9" ry="7" />)}
         {toolButton('line', 'Line', <path d="M5 19 19 5" />)}
         {toolButton('arrow', 'Arrow', <path d="M5 19 19 5M10 5h9v9" />)}
+        {toolButton('elbow', 'Elbow arrow', <path d="M5 19V8h9M10 4l4 4-4 4" />)}
         {toolButton('text', 'Text', <path d="M5 6V4h14v2M12 4v16M9 20h6" />)}
         {toolButton('math', 'Formula (TeX)', <path d="M18 5H6l6 7-6 7h12" />)}
         <span className="mx-1 h-6 w-px shrink-0 bg-neutral-200 dark:bg-neutral-700" />

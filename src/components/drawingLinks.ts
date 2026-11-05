@@ -18,10 +18,12 @@ export type Linked = FabricObject & {
   from?: Binding
   to?: Binding
   edgeOf?: string
+  /** Drawn with right angles, between the sides it hangs on. */
+  elbow?: boolean
 }
 
 /** Saved with the objects, beside fabric's own properties. */
-export const LINK_PROPS = ['id', 'labelOf', 'connector', 'from', 'to', 'edgeOf']
+export const LINK_PROPS = ['id', 'labelOf', 'connector', 'from', 'to', 'edgeOf', 'elbow']
 
 /** Distance at which the pointer catches an anchor, and at which a connector's end snaps to one. */
 export const ANCHOR_HIT = 10
@@ -120,10 +122,54 @@ export function connectorEnd(c: Canvas, a: Point, p: Point, shift: boolean, exce
   return off <= 1.5 ? { point: snap.point, bind: snap } : { point: target, bind: null }
 }
 
-/** Line, with its head for an arrow: one path, so it moves and scales as one object. */
-export function linePath(a: Point | { x: number; y: number }, b: Point | { x: number; y: number }, arrow: boolean, width: number) {
-  let d = `M ${a.x} ${a.y} L ${b.x} ${b.y}`
+type Pt = { x: number; y: number }
+const DIRS: Pt[] = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }]
+/** How far an elbow runs straight out of a side before it turns. */
+const STUB = 24
+
+/** The side of a facing p, along the longer axis: for an end tied to nothing. */
+const facing = (a: Pt, p: Pt): Side => (Math.abs(p.x - a.x) >= Math.abs(p.y - a.y) ? (p.x >= a.x ? 1 : 3) : p.y >= a.y ? 2 : 0)
+
+/**
+ * Right-angled route from a to b. Out of a side it first runs straight (a stub), so it never cuts through
+ * its own shape; an end tied to nothing leaves along the longer axis. A handful of points, no search.
+ */
+export function elbowPoints(a: Pt, b: Pt, sa?: Side, sb?: Side): Pt[] {
+  const out = sa ?? facing(a, b)
+  const into = sb ?? facing(b, a)
+  const s0 = sa == null ? a : { x: a.x + DIRS[out].x * STUB, y: a.y + DIRS[out].y * STUB }
+  const s1 = sb == null ? b : { x: b.x + DIRS[into].x * STUB, y: b.y + DIRS[into].y * STUB }
+  const horizontal = out % 2 === 1
+  let mid: Pt[]
+  if (horizontal !== (into % 2 === 1)) {
+    // One turn.
+    mid = [horizontal ? { x: s1.x, y: s0.y } : { x: s0.x, y: s1.y }]
+  } else if (horizontal) {
+    // Same side twice: around, beyond both stubs. Opposite sides: halfway.
+    const x = out === into ? (out === 1 ? Math.max(s0.x, s1.x) : Math.min(s0.x, s1.x)) : (s0.x + s1.x) / 2
+    mid = [{ x, y: s0.y }, { x, y: s1.y }]
+  } else {
+    const y = out === into ? (out === 2 ? Math.max(s0.y, s1.y) : Math.min(s0.y, s1.y)) : (s0.y + s1.y) / 2
+    mid = [{ x: s0.x, y }, { x: s1.x, y }]
+  }
+  const points: Pt[] = []
+  for (const q of [a, s0, ...mid, s1, b]) {
+    const last = points[points.length - 1]
+    if (last && last.x === q.x && last.y === q.y) continue
+    // A point in line with its two neighbours adds nothing.
+    const before = points[points.length - 2]
+    if (last && before && ((before.x === last.x && last.x === q.x) || (before.y === last.y && last.y === q.y))) points.pop()
+    points.push(q)
+  }
+  return points
+}
+
+/** Line through the points, with its head for an arrow: one path, so it moves and scales as one object. */
+export function linePath(points: Pt[], arrow: boolean, width: number) {
+  let d = points.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ')
   if (arrow) {
+    const b = points[points.length - 1]
+    const a = points[points.length - 2] ?? b
     const angle = Math.atan2(b.y - a.y, b.x - a.x)
     const head = 10 + 2 * width
     const wing = (side: number) => {
@@ -135,8 +181,12 @@ export function linePath(a: Point | { x: number; y: number }, b: Point | { x: nu
   return d
 }
 
-export function makeConnector(kind: 'line' | 'arrow', a: Point | { x: number; y: number }, b: Point | { x: number; y: number }, stroke: string, strokeWidth: number) {
-  const path = new Path(linePath(a, b, kind === 'arrow', strokeWidth), {
+/** `elbow`: right angles, leaving and reaching the given sides (one that is not tied has none). */
+export type Route = { sa?: Side; sb?: Side }
+
+export function makeConnector(kind: 'line' | 'arrow', a: Pt, b: Pt, stroke: string, strokeWidth: number, elbow?: Route) {
+  const points = elbow ? elbowPoints(a, b, elbow.sa, elbow.sb) : [a, b]
+  const path = new Path(linePath(points, kind === 'arrow', strokeWidth), {
     fill: '',
     stroke,
     strokeWidth,
@@ -145,12 +195,17 @@ export function makeConnector(kind: 'line' | 'arrow', a: Point | { x: number; y:
     strokeLineJoin: 'round',
   })
   linked(path).connector = kind
+  if (elbow) linked(path).elbow = true
   return path
 }
 
 /** Both ends of a connector in scene coordinates, read from its path: right after any move or scale. */
 function connectorEnds(o: Path) {
-  const [m, l] = o.path as unknown as [string, number, number][]
+  const commands = o.path as unknown as [string, number, number][]
+  // The line comes first; an arrow's head is a second subpath, after its own M.
+  const head = commands.findIndex((cmd, i) => i > 0 && cmd[0] === 'M')
+  const m = commands[0]
+  const l = commands[(head < 0 ? commands.length : head) - 1]
   const matrix = o.calcTransformMatrix()
   const at = (x: number, y: number) => util.transformPoint(new Point(x - o.pathOffset.x, y - o.pathOffset.y), matrix)
   return [at(m[1], m[2]), at(l[1], l[2])]
@@ -164,7 +219,8 @@ function redrawConnector(c: Canvas, old: Path) {
   const to = l.to && byId(c, l.to.id)
   if (from) a = anchorPoint(from, l.from!.side)
   if (to) b = anchorPoint(to, l.to!.side)
-  const next = makeConnector(l.connector!, a, b, old.stroke as string, old.strokeWidth)
+  const route = l.elbow ? { sa: from ? l.from!.side : undefined, sb: to ? l.to!.side : undefined } : undefined
+  const next = makeConnector(l.connector!, a, b, old.stroke as string, old.strokeWidth, route)
   Object.assign(next, { id: l.id, from: from ? l.from : undefined, to: to ? l.to : undefined })
   next.set({ strokeDashArray: old.strokeDashArray })
   const index = c.getObjects().indexOf(old)
