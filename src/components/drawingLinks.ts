@@ -280,3 +280,105 @@ export function drawAnchors(ctx: CanvasRenderingContext2D, o: FabricObject, hot:
   }
   ctx.restore()
 }
+
+/** Distance under which a loose connector end or a free text is taken to belong to a shape. */
+const NEAR = 60
+
+function boxDistance(o: FabricObject, p: Point) {
+  const r = o.getBoundingRect()
+  const dx = Math.max(r.left - p.x, 0, p.x - (r.left + r.width))
+  const dy = Math.max(r.top - p.y, 0, p.y - (r.top + r.height))
+  return Math.hypot(dx, dy)
+}
+
+const textOf = (o: FabricObject) => ((o as FabricText).text ?? '').replace(/\s+/g, ' ').trim()
+
+/**
+ * The drawing as a graph, in plain text, for a model that reads it beside the image: shapes and their labels,
+ * connectors and the shapes they join, free texts. Exact where the editor knows the links, guessed by distance elsewhere.
+ */
+export function describeDrawing(c: Canvas) {
+  const all = c.getObjects().flatMap(withDescendants).filter((o) => !(o instanceof Group))
+  const shapes = all.filter((o) => isClosed(o) || (o instanceof FabricImage && typeof (o as { tex?: unknown }).tex === 'string'))
+  const names = new Map<FabricObject, string>(shapes.map((o, i) => [o, `n${i + 1}`]))
+  const labels = new Map<string, string>()
+  for (const o of all) {
+    const of = linked(o).labelOf
+    if (of && textOf(o)) labels.set(of, textOf(o))
+  }
+  const loose = all.filter((o) => o instanceof FabricText && !isLabel(o) && textOf(o))
+  const connectors = all.filter((o): o is Path => isConnector(o) && o instanceof Path)
+  const used = new Set<FabricObject>()
+
+  // A free text inside a shape without label is its label.
+  for (const shape of shapes) {
+    if (labels.has(linked(shape).id ?? '') || !isClosed(shape)) continue
+    const inside = loose.find((t) => !used.has(t) && boxDistance(shape, t.getCenterPoint()) === 0)
+    if (inside) {
+      labels.set(ensureId(shape), textOf(inside))
+      used.add(inside)
+    }
+  }
+
+  const nearestShape = (p: Point) => {
+    let best: FabricObject | null = null
+    let d = NEAR
+    for (const s of shapes) {
+      const e = boxDistance(s, p)
+      if (e < d) [best, d] = [s, e]
+    }
+    return best
+  }
+  const shapeName = (o: FabricObject | null | undefined) => (o ? names.get(o) : undefined)
+
+  const edges = connectors.map((o) => {
+    const l = linked(o)
+    const [a, b] = connectorEnds(o)
+    const bound = (end?: Binding) => (end ? shapes.find((s) => linked(s).id === end.id) : undefined)
+    const from = bound(l.from) ?? nearestShape(a)
+    const to = bound(l.to) ?? nearestShape(b)
+    const exact = Boolean(l.from && bound(l.from) && l.to && bound(l.to))
+    return { o, from: shapeName(from), to: shapeName(to), mid: new Point((a.x + b.x) / 2, (a.y + b.y) / 2), exact, kind: l.connector! }
+  })
+
+  // A free text near the middle of a connector, and nearer to it than to any shape, is its label.
+  const edgeLabels = new Map<number, string>()
+  for (const t of loose) {
+    if (used.has(t)) continue
+    const p = t.getCenterPoint()
+    let best = -1
+    let d = NEAR
+    edges.forEach((e, i) => {
+      const dist = e.mid.distanceFrom(p)
+      if (dist < d && !edgeLabels.has(i)) [best, d] = [i, dist]
+    })
+    const shape = nearestShape(p)
+    if (best >= 0 && (!shape || boxDistance(shape, p) > d)) {
+      edgeLabels.set(best, textOf(t))
+      used.add(t)
+    }
+  }
+
+  const round = (p: Point) => `(${Math.round(p.x)}, ${Math.round(p.y)})`
+  const lines = ['SHAPES (id, kind, center x y in pixels, label):']
+  for (const s of shapes) {
+    const kind = s instanceof Rect ? 'rectangle' : s instanceof Ellipse ? 'ellipse' : 'formula'
+    const label = s instanceof FabricImage ? `TeX ${(s as unknown as { tex: string }).tex}` : labels.get(linked(s).id ?? '') ?? ''
+    lines.push(`- ${names.get(s)} ${kind} ${round(s.getCenterPoint())} label: ${JSON.stringify(label)}`)
+  }
+  if (!shapes.length) lines.push('- none')
+  lines.push('', 'CONNECTORS (from -> to, "?" = end not on a shape):')
+  edges.forEach((e, i) => {
+    const label = edgeLabels.get(i)
+    const how = e.exact ? 'attached' : 'guessed from position'
+    lines.push(`- ${e.kind} ${e.from ?? '?'} -> ${e.to ?? '?'} (${how})${label ? ` label: ${JSON.stringify(label)}` : ''}`)
+  })
+  if (!edges.length) lines.push('- none')
+  const rest = loose.filter((t) => !used.has(t))
+  lines.push('', 'OTHER TEXTS (center x y, text):')
+  for (const t of rest) lines.push(`- ${round(t.getCenterPoint())} ${JSON.stringify(textOf(t))}`)
+  if (!rest.length) lines.push('- none')
+  const strokes = all.filter((o) => o instanceof Path && !isConnector(o)).length
+  if (strokes) lines.push('', `${strokes} free hand strokes: only visible in the image (they may be shapes, arrows or handwriting).`)
+  return lines.join('\n')
+}

@@ -25,7 +25,7 @@ function render(source: string, theme: Theme) {
   return mermaid.render(`mermaid-${nextId++}`, source).then((r) => r.svg)
 }
 
-function draw(source: string, theme: Theme): Promise<string> {
+export function draw(source: string, theme: Theme): Promise<string> {
   const key = `${theme}\n${source}`
   let svg = cache.get(key)
   if (!svg) {

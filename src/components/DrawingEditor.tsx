@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ActiveSelection,
   cache,
@@ -23,6 +23,7 @@ import {
   ANCHOR_HIT,
   anchorAt,
   connectorEnd,
+  describeDrawing,
   drawAnchors,
   ensureId,
   follow,
@@ -38,6 +39,12 @@ import {
   withDependents,
   type Side,
 } from './drawingLinks'
+import type { SketchInput } from './SketchMermaidPanel'
+
+/** Experimental, dev only: Mermaid and its panel load on the first conversion. */
+const SketchMermaidPanel = lazy(() => import('./SketchMermaidPanel'))
+/** Longest side of the image sent to the vision model. */
+const VISION_SIDE = 1536
 
 /*
  * Full screen sketch pad for the notes, loaded on demand with fabric. Shapes, text and free hand lines,
@@ -199,6 +206,7 @@ export default function DrawingEditor({
   const [canUndo, setCanUndo] = useState(false)
   /** The TeX field: where it shows, and the formula it edits, if any. */
   const [math, setMath] = useState<{ x: number; y: number; tex: string; target?: MathImage } | null>(null)
+  const [sketch, setSketch] = useState<SketchInput | null>(null)
   // Read by the canvas handlers, registered once.
   const current = useRef({ tool, color, width, fontSize })
   current.current = { tool, color, width, fontSize }
@@ -632,11 +640,27 @@ export default function DrawingEditor({
     onSave(preview, w, { v: 1, objects: c.toObject(EXTRA_PROPS).objects })
   }
 
+  /** The drawing as an image and as a graph, for the Mermaid conversion. */
+  const toMermaid = () => {
+    const c = canvas.current!
+    c.discardActiveObject()
+    const objects = c.getObjects()
+    if (!objects.length) return
+    const box = bounds(objects)
+    const w = Math.ceil(box.width + 2 * PAD)
+    const h = Math.ceil(box.height + 2 * PAD)
+    const multiplier = Math.min(2, VISION_SIDE / Math.max(w, h))
+    const image = c
+      .toCanvasElement(multiplier, { left: Math.floor(box.left - PAD), top: Math.floor(box.top - PAD), width: w, height: h })
+      .toDataURL('image/jpeg', 0.9)
+    setSketch({ image, description: describeDrawing(c) })
+  }
+
   // Delete, undo, and Escape to leave the selection; the note behind does not see these keys.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // The TeX field handles its own keys.
-      if (e.target instanceof HTMLInputElement) return
+      // The TeX field and the Mermaid panel handle their own keys.
+      if (e.target instanceof HTMLInputElement || sketch) return
       const active = canvas.current?.getActiveObject()
       const editing = active && isText(active) && active.isEditing
       if (e.key === 'Escape') {
@@ -760,6 +784,17 @@ export default function DrawingEditor({
           <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
         </IconButton>
         <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={toMermaid}
+              disabled={empty}
+              className="group relative rounded-lg px-3 py-1.5 text-sm text-neutral-500 disabled:opacity-30"
+            >
+              Mermaid
+              <Tip label="Convert to Mermaid (experimental)" align="end" />
+            </button>
+          )}
           <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm text-neutral-500">
             Cancel
           </button>
@@ -776,6 +811,11 @@ export default function DrawingEditor({
         </div>
       </div>
       <div ref={host} className="relative min-h-0 flex-1 overflow-hidden">
+        {sketch && (
+          <Suspense fallback={null}>
+            <SketchMermaidPanel input={sketch} onClose={() => setSketch(null)} />
+          </Suspense>
+        )}
         {math && (
           <MathField
             key={`${math.x},${math.y}`}
