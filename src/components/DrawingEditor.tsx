@@ -855,16 +855,14 @@ export default function DrawingEditor({
           <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
         </IconButton>
         <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">
-          {import.meta.env.DEV && (
-            <button
-              type="button"
-              onClick={toMermaid}
-              className="group relative rounded-lg px-3 py-1.5 text-sm text-neutral-500 disabled:opacity-30"
-            >
-              Mermaid
-              <Tip label={empty ? 'Draw a Mermaid diagram (experimental)' : 'Convert to Mermaid (experimental)'} align="end" />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={toMermaid}
+            className="group relative rounded-lg px-3 py-1.5 text-sm text-neutral-500 disabled:opacity-30"
+          >
+            Mermaid
+            <Tip label={empty ? 'Draw a Mermaid diagram (experimental)' : 'Convert to Mermaid (experimental)'} align="end" />
+          </button>
           <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm text-neutral-500">
             Cancel
           </button>
