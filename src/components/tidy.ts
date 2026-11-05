@@ -4,7 +4,7 @@ import { follow, isClosed, isLabel, labelFor, labelOf, placeLabel } from './draw
 /*
  * Tidies a hand placed diagram: what is nearly equal becomes equal.
  * Close sizes take their mean, close centers line up, close spacings between rows and columns even out,
- * and the texts of the shapes shrink until they fit. Only closed shapes move, and what hangs on them follows.
+ * the boxes that overlap move apart, and the texts of the shapes shrink until they fit. Only closed shapes move, and what hangs on them follows.
  */
 
 /** Two sizes this close, relative to the larger, are meant to be equal. */
@@ -79,6 +79,43 @@ function arrange(centers: number[], sizes: number[]) {
   return aligned.map((v) => moved.get(v)!)
 }
 
+/** Space kept between two boxes pushed apart. */
+const SEPARATION = 24
+/** Rounds of pushing: each one settles the overlaps the previous one made. */
+const SEPARATION_ROUNDS = 60
+
+/**
+ * Overlapping boxes pushed apart, half each, along the axis where they overlap least: the smallest move.
+ * Boxes on one row or column overlap only across it, so they stay lined up.
+ */
+export function separate(boxes: { x: number; y: number; w: number; h: number }[], gap = SEPARATION) {
+  for (let round = 0; round < SEPARATION_ROUNDS; round++) {
+    let moved = false
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]
+        const b = boxes[j]
+        const dx = b.x - a.x
+        const dy = b.y - a.y
+        const ox = (a.w + b.w) / 2 + gap - Math.abs(dx)
+        const oy = (a.h + b.h) / 2 + gap - Math.abs(dy)
+        if (ox <= 0.5 || oy <= 0.5) continue
+        moved = true
+        if (ox < oy) {
+          const s = (dx >= 0 ? 1 : -1) * (ox / 2)
+          a.x -= s
+          b.x += s
+        } else {
+          const s = (dy >= 0 ? 1 : -1) * (oy / 2)
+          a.y -= s
+          b.y += s
+        }
+      }
+    }
+    if (!moved) return
+  }
+}
+
 /** Room for a label: the box less its margins; in an ellipse, the rectangle it holds. */
 function room(shape: FabricObject) {
   const w = shape.width * Math.abs(shape.scaleX)
@@ -88,7 +125,7 @@ function room(shape: FabricObject) {
 }
 
 /** Shrinks the label until it fits its shape: a word wider than the box widens a Textbox, more lines make it taller. */
-function fit(label: Textbox, shape: FabricObject) {
+export function fit(label: Textbox, shape: FabricObject) {
   const { w, h } = room(shape)
   const overflows = () => {
     // Wrapped at the room's width: in an ellipse, narrower than placeLabel's.
@@ -133,6 +170,8 @@ export function tidy(c: Canvas, scope?: FabricObject[]) {
     const xs = arrange(boxes.map((b) => b.x), ws)
     const ys = arrange(boxes.map((b) => b.y), hs)
     boxes.forEach((b, i) => Object.assign(b, { w: ws[i], h: hs[i], x: xs[i], y: ys[i] }))
+    // Larger boxes, or boxes drawn over each other, make room.
+    separate(boxes)
   }
 
   for (const { shape, x, y, w, h } of boxes) {

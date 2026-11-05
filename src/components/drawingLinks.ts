@@ -4,7 +4,8 @@ import { uuid } from '../lib/id'
 /*
  * What ties the objects of a drawing together, kept as properties saved with them:
  * - a shape's label, a Textbox centered on it, `labelOf` the shape's id;
- * - a connector (line or arrow), `from` and `to` an anchor of a shape: it follows the shape.
+ * - a connector (line or arrow), `from` and `to` an anchor of a shape: it follows the shape;
+ * - a connector's label, a free text, `edgeOf` the connector's id: it moves along with the connector's middle.
  * Anchors are the middles of the four sides of an object's box, in its own frame, so they turn with it.
  */
 
@@ -16,10 +17,11 @@ export type Linked = FabricObject & {
   connector?: 'line' | 'arrow'
   from?: Binding
   to?: Binding
+  edgeOf?: string
 }
 
 /** Saved with the objects, beside fabric's own properties. */
-export const LINK_PROPS = ['id', 'labelOf', 'connector', 'from', 'to']
+export const LINK_PROPS = ['id', 'labelOf', 'connector', 'from', 'to', 'edgeOf']
 
 /** Distance at which the pointer catches an anchor, and at which a connector's end snaps to one. */
 export const ANCHOR_HIT = 10
@@ -164,9 +166,20 @@ function redrawConnector(c: Canvas, old: Path) {
   if (to) b = anchorPoint(to, l.to!.side)
   const next = makeConnector(l.connector!, a, b, old.stroke as string, old.strokeWidth)
   Object.assign(next, { id: l.id, from: from ? l.from : undefined, to: to ? l.to : undefined })
+  next.set({ strokeDashArray: old.strokeDashArray })
   const index = c.getObjects().indexOf(old)
   c.remove(old)
   c.insertAt(index, next)
+  // Its labels keep their place relative to its middle.
+  if (!l.id) return
+  const [p, q] = connectorEnds(old)
+  const shift = a.midPointFrom(b).subtract(p.midPointFrom(q))
+  if (!shift.x && !shift.y) return
+  for (const o of c.getObjects()) {
+    if (linked(o).edgeOf !== l.id) continue
+    o.set({ left: o.left + shift.x, top: o.top + shift.y })
+    o.setCoords()
+  }
 }
 
 /** The object and, for a group or a selection, everything inside it. */
@@ -302,12 +315,17 @@ export function describeDrawing(c: Canvas) {
   const shapes = all.filter((o) => isClosed(o) || (o instanceof FabricImage && typeof (o as { tex?: unknown }).tex === 'string'))
   const names = new Map<FabricObject, string>(shapes.map((o, i) => [o, `n${i + 1}`]))
   const labels = new Map<string, string>()
+  const tiedLabels = new Map<string, string>()
   for (const o of all) {
+    const edge = linked(o).edgeOf
+    if (edge && textOf(o)) tiedLabels.set(edge, [tiedLabels.get(edge), textOf(o)].filter(Boolean).join(' '))
     const of = linked(o).labelOf
     if (of && textOf(o)) labels.set(of, textOf(o))
   }
-  const loose = all.filter((o) => o instanceof FabricText && !isLabel(o) && textOf(o))
   const connectors = all.filter((o): o is Path => isConnector(o) && o instanceof Path)
+  const connectorIds = new Set(connectors.map((o) => linked(o).id).filter(Boolean))
+  // A text tied to a connector still there is its label; one whose connector went is a free text again.
+  const loose = all.filter((o) => o instanceof FabricText && !isLabel(o) && textOf(o) && !connectorIds.has(linked(o).edgeOf))
   const used = new Set<FabricObject>()
 
   // A free text inside a shape without label is its label.
@@ -343,6 +361,10 @@ export function describeDrawing(c: Canvas) {
 
   // A free text near the middle of a connector, and nearer to it than to any shape, is its label.
   const edgeLabels = new Map<number, string>()
+  edges.forEach((e, i) => {
+    const tied = tiedLabels.get(linked(e.o).id ?? '')
+    if (tied) edgeLabels.set(i, tied)
+  })
   for (const t of loose) {
     if (used.has(t)) continue
     const p = t.getCenterPoint()

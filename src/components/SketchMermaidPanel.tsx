@@ -8,12 +8,22 @@ import { askKey } from '../hooks/useDictation'
 
 /*
  * Experimental, dev only: the sketch converted to Mermaid, drawn beside its editable source.
- * Nothing is saved: the code is copied by hand.
+ * Nothing is saved: the code is copied by hand, or drawn back on the pad to edit it there.
+ * Without a sketch to convert, the panel opens empty, for a pasted diagram.
  */
 
 export type SketchInput = { image: string; description: string }
 
-export default function SketchMermaidPanel({ input, onClose }: { input: SketchInput; onClose: () => void }) {
+export default function SketchMermaidPanel({
+  input,
+  onClose,
+  onDraw,
+}: {
+  input: SketchInput | null
+  onClose: () => void
+  /** Draws the code on the pad; throws if it cannot. */
+  onDraw: (code: string) => Promise<void>
+}) {
   const theme = useTheme()
   const [result, setResult] = useState<SketchResult | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
@@ -22,8 +32,10 @@ export default function SketchMermaidPanel({ input, onClose }: { input: SketchIn
   const [renderError, setRenderError] = useState<string | null>(null)
   const [run, setRun] = useState(0)
   const [details, setDetails] = useState(false)
+  const [drawing, setDrawing] = useState(false)
 
   useEffect(() => {
+    if (!input) return
     let live = true
     setResult(null)
     setFailure(null)
@@ -80,7 +92,18 @@ export default function SketchMermaidPanel({ input, onClose }: { input: SketchIn
       () => toast('Could not copy'),
     )
 
-  const busy = !result && !failure
+  const busy = Boolean(input) && !result && !failure
+
+  const drawOnPad = async () => {
+    setDrawing(true)
+    try {
+      await onDraw(code)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not draw this diagram')
+    } finally {
+      setDrawing(false)
+    }
+  }
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-white md:flex-row dark:bg-neutral-950">
@@ -104,13 +127,24 @@ export default function SketchMermaidPanel({ input, onClose }: { input: SketchIn
             </span>
           )}
           <div className="ml-auto flex shrink-0 gap-1">
+            {input && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setRun((n) => n + 1)}
+                className="rounded-lg px-2 py-1 text-sm text-neutral-500 disabled:opacity-30"
+              >
+                Retry
+              </button>
+            )}
             <button
               type="button"
-              disabled={busy}
-              onClick={() => setRun((n) => n + 1)}
+              disabled={!code.trim() || !svg || Boolean(renderError) || drawing}
+              onClick={() => void drawOnPad()}
+              title="Draw this flowchart on the pad, to edit it"
               className="rounded-lg px-2 py-1 text-sm text-neutral-500 disabled:opacity-30"
             >
-              Retry
+              Draw
             </button>
             <button
               type="button"
@@ -134,13 +168,16 @@ export default function SketchMermaidPanel({ input, onClose }: { input: SketchIn
           onChange={(e) => setCode(e.target.value)}
           spellCheck={false}
           readOnly={busy}
-          placeholder={busy ? '…' : ''}
+          autoFocus={!input}
+          placeholder={busy ? '…' : 'Paste a Mermaid flowchart to draw it on the pad'}
           className="min-h-40 flex-1 resize-none rounded-xl bg-neutral-100 p-2 font-mono text-xs outline-none dark:bg-neutral-900"
         />
-        <button type="button" onClick={() => setDetails(!details)} className="self-start text-xs text-neutral-400">
-          {details ? 'Hide' : 'Show'} what the model got
-        </button>
-        {details && (
+        {input && (
+          <button type="button" onClick={() => setDetails(!details)} className="self-start text-xs text-neutral-400">
+            {details ? 'Hide' : 'Show'} what the model got
+          </button>
+        )}
+        {input && details && (
           <div className="max-h-64 overflow-auto rounded-lg bg-neutral-100 p-2 text-xs dark:bg-neutral-900">
             <img src={input.image} alt="Sent image" className="mb-2 max-h-32 border border-neutral-300" />
             <pre className="whitespace-pre-wrap">{input.description}</pre>

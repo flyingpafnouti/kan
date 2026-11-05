@@ -28,6 +28,7 @@ import {
   ensureId,
   follow,
   hoveredAnchorable,
+  isConnector,
   isClosed,
   isLabel,
   labelFor,
@@ -41,6 +42,7 @@ import {
 } from './drawingLinks'
 import type { SketchInput } from './SketchMermaidPanel'
 import { tidy } from './tidy'
+import { spread } from './spread'
 
 /** Experimental, dev only: Mermaid and its panel load on the first conversion. */
 const SketchMermaidPanel = lazy(() => import('./SketchMermaidPanel'))
@@ -142,6 +144,8 @@ function renewIds(objects: Serialized[]) {
     const next: Serialized = { ...o }
     if (typeof o.id === 'string') next.id = ids.get(o.id)
     if (typeof o.labelOf === 'string') next.labelOf = ids.get(o.labelOf)
+    // A connector's label copied without it becomes a free text.
+    if (typeof o.edgeOf === 'string') next.edgeOf = ids.get(o.edgeOf)
     for (const end of ['from', 'to'] as const) {
       const bound = o[end] as { id: string; side: number } | undefined
       if (bound) next[end] = ids.has(bound.id) ? { ...bound, id: ids.get(bound.id) } : undefined
@@ -207,7 +211,8 @@ export default function DrawingEditor({
   const [canUndo, setCanUndo] = useState(false)
   /** The TeX field: where it shows, and the formula it edits, if any. */
   const [math, setMath] = useState<{ x: number; y: number; tex: string; target?: MathImage } | null>(null)
-  const [sketch, setSketch] = useState<SketchInput | null>(null)
+  /** The Mermaid panel, open with the sketch to convert, or null to paste a diagram. */
+  const [sketch, setSketch] = useState<{ input: SketchInput | null } | null>(null)
   // Read by the canvas handlers, registered once.
   const current = useRef({ tool, color, width, fontSize })
   current.current = { tool, color, width, fontSize }
@@ -218,6 +223,8 @@ export default function DrawingEditor({
   /** Records the state after a change, for undo. */
   const commit = () => {
     const c = canvas.current!
+    // Connectors go under everything, in their order: a box over an arrow can still be grabbed, and its arrows follow it.
+    for (const o of c.getObjects().filter(isConnector).reverse()) c.sendObjectToBack(o)
     const s = snapshot()
     if (s !== history.current.at(-1)) history.current.push(s)
     setCanUndo(history.current.length > 1)
@@ -641,6 +648,17 @@ export default function DrawingEditor({
     onSave(preview, w, { v: 1, objects: c.toObject(EXTRA_PROPS).objects })
   }
 
+  /** Ctrl+A: everything one can select, with the selection tool. Labels follow their shapes. */
+  const selectAll = () => {
+    const c = canvas.current!
+    const objects = c.getObjects().filter((o) => o.selectable)
+    if (!objects.length) return
+    setTool('select')
+    c.discardActiveObject()
+    c.setActiveObject(objects.length === 1 ? objects[0] : new ActiveSelection(objects, { canvas: c }))
+    c.requestRenderAll()
+  }
+
   /** Evens out sizes, alignments and spacings of the selected shapes, or of all if fewer than two are selected. */
   const tidyUp = () => {
     const c = canvas.current!
@@ -652,12 +670,21 @@ export default function DrawingEditor({
     commit()
   }
 
+  /** The opposite of tidying: the whole drawing spread over the pad, with as few lines across boxes as it can. */
+  const spreadOut = () => {
+    const c = canvas.current!
+    c.discardActiveObject()
+    if (!spread(c)) return toast('Nothing to spread: it takes at least two rectangles or ellipses')
+    commit()
+  }
+
   /** The drawing as an image and as a graph, for the Mermaid conversion. */
   const toMermaid = () => {
     const c = canvas.current!
     c.discardActiveObject()
     const objects = c.getObjects()
-    if (!objects.length) return
+    // An empty pad: the panel waits for a diagram to draw.
+    if (!objects.length) return setSketch({ input: null })
     const box = bounds(objects)
     const w = Math.ceil(box.width + 2 * PAD)
     const h = Math.ceil(box.height + 2 * PAD)
@@ -665,7 +692,24 @@ export default function DrawingEditor({
     const image = c
       .toCanvasElement(multiplier, { left: Math.floor(box.left - PAD), top: Math.floor(box.top - PAD), width: w, height: h })
       .toDataURL('image/jpeg', 0.9)
-    setSketch({ image, description: describeDrawing(c) })
+    setSketch({ input: { image, description: describeDrawing(c) } })
+  }
+
+  /** A Mermaid flowchart drawn on the pad beside the drawing, selected, the panel closed. */
+  const drawMermaid = async (code: string) => {
+    const c = canvas.current!
+    const { mermaidToSketch } = await import('./mermaidToSketch')
+    c.discardActiveObject()
+    const { fontSize } = current.current
+    const added = await mermaidToSketch(c, code, { font: FONT, fontSize, color: current.current.color, width: current.current.width })
+    commit()
+    setSketch(null)
+    setTool('select')
+    const shapes = added.filter((o) => o.selectable)
+    if (shapes.length) c.setActiveObject(new ActiveSelection(shapes, { canvas: c }))
+    // The selection holds the smaller edge labels: the pen keeps its size.
+    setFontSize(fontSize)
+    c.requestRenderAll()
   }
 
   // Delete, undo, and Escape to leave the selection; the note behind does not see these keys.
@@ -689,12 +733,18 @@ export default function DrawingEditor({
       } else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'a') {
         e.preventDefault()
         tidyUp()
+      } else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault()
+        spreadOut()
       } else if (!e.ctrlKey && !e.metaKey && !e.altKey && TOOL_KEYS[e.key.toLowerCase()]) {
         e.preventDefault()
         setTool(TOOL_KEYS[e.key.toLowerCase()])
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
         removeSelection()
+      } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        selectAll()
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         void undo()
@@ -798,6 +848,9 @@ export default function DrawingEditor({
         <IconButton label="Tidy up" shortcut="Alt+A" onClick={tidyUp}>
           <path d="M4 5h6v5H4zM14 5h6v5h-6zM4 14h6v5H4zM14 14h6v5h-6z" />
         </IconButton>
+        <IconButton label="Spread out" shortcut="Alt+E" onClick={spreadOut}>
+          <path d="M9 9 4 4M4 8V4h4M15 9l5-5M16 4h4v4M9 15l-5 5M4 16v4h4M15 15l5 5M20 16v4h-4" />
+        </IconButton>
         <IconButton label="Delete selection" shortcut="Del" onClick={removeSelection}>
           <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
         </IconButton>
@@ -806,11 +859,10 @@ export default function DrawingEditor({
             <button
               type="button"
               onClick={toMermaid}
-              disabled={empty}
               className="group relative rounded-lg px-3 py-1.5 text-sm text-neutral-500 disabled:opacity-30"
             >
               Mermaid
-              <Tip label="Convert to Mermaid (experimental)" align="end" />
+              <Tip label={empty ? 'Draw a Mermaid diagram (experimental)' : 'Convert to Mermaid (experimental)'} align="end" />
             </button>
           )}
           <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm text-neutral-500">
@@ -831,7 +883,7 @@ export default function DrawingEditor({
       <div ref={host} className="relative min-h-0 flex-1 overflow-hidden">
         {sketch && (
           <Suspense fallback={null}>
-            <SketchMermaidPanel input={sketch} onClose={() => setSketch(null)} />
+            <SketchMermaidPanel input={sketch.input} onClose={() => setSketch(null)} onDraw={drawMermaid} />
           </Suspense>
         )}
         {math && (
