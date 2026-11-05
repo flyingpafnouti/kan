@@ -40,6 +40,7 @@ import {
   type Side,
 } from './drawingLinks'
 import type { SketchInput } from './SketchMermaidPanel'
+import { tidy } from './tidy'
 
 /** Experimental, dev only: Mermaid and its panel load on the first conversion. */
 const SketchMermaidPanel = lazy(() => import('./SketchMermaidPanel'))
@@ -640,6 +641,17 @@ export default function DrawingEditor({
     onSave(preview, w, { v: 1, objects: c.toObject(EXTRA_PROPS).objects })
   }
 
+  /** Evens out sizes, alignments and spacings of the selected shapes, or of all if fewer than two are selected. */
+  const tidyUp = () => {
+    const c = canvas.current!
+    const selected = c.getActiveObjects()
+    const scope = selected.length > 1 ? selected : undefined
+    // Out of the selection first: inside it, positions are relative to it.
+    c.discardActiveObject()
+    if (!tidy(c, scope)) return toast('Nothing to tidy: only rectangles and ellipses are arranged')
+    commit()
+  }
+
   /** The drawing as an image and as a graph, for the Mermaid conversion. */
   const toMermaid = () => {
     const c = canvas.current!
@@ -674,6 +686,9 @@ export default function DrawingEditor({
         stepSize(e.key === '>' ? 1 : -1)
       } else if (editing) {
         return
+      } else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        tidyUp()
       } else if (!e.ctrlKey && !e.metaKey && !e.altKey && TOOL_KEYS[e.key.toLowerCase()]) {
         e.preventDefault()
         setTool(TOOL_KEYS[e.key.toLowerCase()])
@@ -779,6 +794,9 @@ export default function DrawingEditor({
         </IconButton>
         <IconButton label="Ungroup" shortcut="Ctrl+Shift+G" onClick={ungroup}>
           <path d="M4 4h6v6H4zM14 14h6v6h-6z" />
+        </IconButton>
+        <IconButton label="Tidy up" shortcut="Alt+A" onClick={tidyUp}>
+          <path d="M4 5h6v5H4zM14 5h6v5h-6zM4 14h6v5H4zM14 14h6v5h-6z" />
         </IconButton>
         <IconButton label="Delete selection" shortcut="Del" onClick={removeSelection}>
           <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />

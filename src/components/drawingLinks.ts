@@ -175,7 +175,7 @@ function withDescendants(o: FabricObject): FabricObject[] {
 }
 
 /** The label sits on its shape's center, as wide as the shape, at its angle. */
-function placeLabel(label: Textbox, shape: FabricObject) {
+export function placeLabel(label: Textbox, shape: FabricObject) {
   const d = util.qrDecompose(shape.calcTransformMatrix())
   label.set({
     left: d.translateX,
