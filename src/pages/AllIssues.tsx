@@ -20,13 +20,7 @@ import { BackIcon, SearchIcon } from '../components/icons'
 import { DesktopSearch } from '../components/DesktopSearch'
 import { SearchPalette } from '../components/SearchPalette'
 import { SyncBadge } from '../components/SyncBadge'
-
-type Sort = 'priority' | 'recent'
-
-const SORTS: { id: Sort; label: string }[] = [
-  { id: 'priority', label: 'Priority' },
-  { id: 'recent', label: 'Recent' },
-]
+import { SORTS, byPriority as byOwnPriority, byRecent, readSort, type Sort } from '../lib/sort'
 
 const SORT_KEY = 'all-issues-sort'
 
@@ -42,7 +36,7 @@ export function AllIssues() {
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const desktopSearch = useDesktopSearch()
   const [tab, setTab] = useState<Status>('todo')
-  const [sort, setSort] = useState<Sort>(() => (readCache<Sort>(SORT_KEY) === 'recent' ? 'recent' : 'priority'))
+  const [sort, setSort] = useState<Sort>(() => readSort(readCache(SORT_KEY)))
   const [openId, setOpenId] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
   // Issue reached with the sheet's previous / next: shown without the opening animation.
@@ -79,11 +73,7 @@ export function AllIssues() {
   const name = (issue: Issue) => projects?.find((p) => p.id === issue.project_id)?.name
   const known = (issue: Issue) => !projects || rank.has(issue.project_id)
   const byPriority = (a: Issue, b: Issue) =>
-    (a.priority ?? 4) - (b.priority ?? 4) ||
-    (rank.get(a.project_id) ?? 0) - (rank.get(b.project_id) ?? 0) ||
-    a.position - b.position
-  // By instant: the dates written here and those sent by the server differ in format.
-  const byRecent = (a: Issue, b: Issue) => Date.parse(b.updated_at) - Date.parse(a.updated_at)
+    (a.priority ?? 4) - (b.priority ?? 4) || (rank.get(a.project_id) ?? 0) - (rank.get(b.project_id) ?? 0) || byOwnPriority(a, b)
   const all = (status: Status) => column(status).filter(known)
 
   const now = Date.now()

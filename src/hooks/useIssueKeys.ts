@@ -10,17 +10,15 @@ interface Options {
   setTab?: (s: Status) => void
   onOpen: (id: string) => void
   onStatus: (id: string, s: Status) => void
-  /** Moves the issue one slot up (-1) or down (1) in its column; absent where the order is computed. */
-  onReorder?: (id: string, dir: -1 | 1) => void
 }
 
 const ARROWS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
 
 /**
  * Keyboard selection on a board: arrows move it between issues and columns, Enter opens the issue,
- * Alt + ↑/↓ reorders it and Alt + ←/→ changes its status. Escape or Backspace clears the selection first.
+ * and Alt + ←/→ changes its status. Escape or Backspace clears the selection first.
  */
-export function useIssueKeys({ enabled, column, tab, setTab, onOpen, onStatus, onReorder }: Options) {
+export function useIssueKeys({ enabled, column, tab, setTab, onOpen, onStatus }: Options) {
   const [selected, setSelected] = useState<string | null>(null)
 
   useEffect(() => {
@@ -60,8 +58,7 @@ export function useIssueKeys({ enabled, column, tab, setTab, onOpen, onStatus, o
       const horizontal = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0
 
       if (e.altKey) {
-        if (vertical) onReorder?.(selected!, vertical)
-        else if (STATUSES[ci + horizontal]) {
+        if (horizontal && STATUSES[ci + horizontal]) {
           const target = STATUSES[ci + horizontal].id
           onStatus(selected!, target)
           setTab?.(target)

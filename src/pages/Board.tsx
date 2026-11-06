@@ -16,8 +16,7 @@ import {
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { STATUSES, doneAtFor, doneSince, isArchived, type Issue, type Status } from '../lib/types'
-import { between } from '../lib/position'
-import { indexIssues, linksOf, nestedOrder, positionAt, siblingsIn } from '../lib/dependencies'
+import { indexIssues, linksOf, nestedOrder } from '../lib/dependencies'
 import { clearPendingOpen, getPendingOpen, navigate, rememberProject } from '../lib/router'
 import { useIssues } from '../hooks/useIssues'
 import { useProject, useProjectList } from '../hooks/useProjects'
@@ -37,6 +36,10 @@ import { DesktopSearch } from '../components/DesktopSearch'
 import { SearchPalette } from '../components/SearchPalette'
 import { boardToMarkdown, downloadMarkdown } from '../lib/markdown'
 import { SyncBadge } from '../components/SyncBadge'
+import { Switch } from '../components/Switch'
+import { readCache, writeCache } from '../lib/cache'
+import { SORTS, byPriority, byRecent, readSort, type Sort } from '../lib/sort'
+const sortKey = (projectId: string) => `board-sort:${projectId}`
 
 const isStatus = (id: UniqueIdentifier): id is Status => STATUSES.some((s) => s.id === id)
 
@@ -49,6 +52,8 @@ export function Board({ projectId }: { projectId: string }) {
   const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
   const desktopSearch = useDesktopSearch()
   const [tab, setTab] = useState<Status>('todo')
+  // Remembered per project. The order is computed, so drag and drop only changes the status.
+  const [sort, setSort] = useState<Sort>(() => readSort(readCache(sortKey(projectId))))
   const [openId, setOpenId] = useState<string | null>(getPendingOpen)
   const [searching, setSearching] = useState(false)
   useEffect(clearPendingOpen, [])
@@ -114,27 +119,15 @@ export function Board({ projectId }: { projectId: string }) {
     if (!a || !over) return
     const target = isStatus(over.id) ? over.id : find(over.id)?.status
     if (!target || target === a.status) return
-    const col = visible(target)
-    const i = col.findIndex((x) => x.id === over.id)
-    const position = positionAt(col, a, i < 0 ? col.length : i)
-    setIssues(
-      (list) =>
-        list?.map((x) => (x.id === a.id ? { ...x, status: target, position, done_at: doneAtFor(x, target) } : x)) ?? null,
-    )
+    setIssues((list) => list?.map((x) => (x.id === a.id ? { ...x, status: target, done_at: doneAtFor(x, target) } : x)) ?? null)
   }
 
-  function onDragEnd({ active, over }: DragEndEvent) {
+  function onDragEnd({ active }: DragEndEvent) {
     const start = dragStart
     setDragStart(null)
     const a = find(active.id)
     if (!a || !start) return
-    let position = a.position
-    if (over && over.id !== active.id && !isStatus(over.id)) {
-      const col = visible(a.status)
-      const to = col.findIndex((x) => x.id === over.id)
-      if (to >= 0 && col.some((x) => x.id === a.id)) position = positionAt(col, a, to)
-    }
-    if (a.status !== start.status || position !== start.position) update(a.id, { status: a.status, position })
+    if (a.status !== start.status) update(a.id, { status: a.status })
     if (a.status === 'done' && start.status !== 'done') announceUnblocked(a.id)
   }
 
@@ -155,22 +148,11 @@ export function Board({ projectId }: { projectId: string }) {
   const archived = column('done')
     .filter((x) => isArchived(x, now))
     .sort((a, b) => doneSince(b).localeCompare(doneSince(a)))
-  const visible = (status: Status) =>
-    nestedOrder(status === 'done' ? column('done').filter((x) => !isArchived(x, now)) : column(status))
-  const counts = { todo: column('todo').length, doing: column('doing').length, done: visible('done').length }
-
-  function reorder(id: string, dir: -1 | 1) {
-    const a = find(id)
-    if (!a) return
-    const col = siblingsIn(visible(a.status), id)
-    const i = col.findIndex((x) => x.id === id)
-    const neighbor = col[i + dir]
-    if (!neighbor) return
-    const beyond = col[i + 2 * dir]
-    update(id, {
-      position: dir < 0 ? between(beyond?.position, neighbor.position) : between(neighbor.position, beyond?.position),
-    })
+  const visible = (status: Status) => {
+    const list = status === 'done' ? column('done').filter((x) => !isArchived(x, now)) : column(status)
+    return nestedOrder([...list].sort(sort === 'recent' ? byRecent : byPriority))
   }
+  const counts = { todo: column('todo').length, doing: column('doing').length, done: visible('done').length }
 
   const { selected, setSelected, sibling } = useIssueKeys({
     enabled: !openId && !searching && !dragStart,
@@ -179,7 +161,6 @@ export function Board({ projectId }: { projectId: string }) {
     setTab: desktop ? undefined : setTab,
     onOpen: setOpenId,
     onStatus: setStatus,
-    onReorder: reorder,
   })
   const columnProps = {
     onOpen: (id: string) => {
@@ -189,6 +170,11 @@ export function Board({ projectId }: { projectId: string }) {
     onStatus: setStatus,
     links: (issue: Issue) => linksOf(issue, index),
     selected,
+  }
+
+  function changeSort(next: Sort) {
+    setSort(next)
+    writeCache(sortKey(projectId), next)
   }
 
   const prev = open && sibling(open.id, -1)
@@ -220,6 +206,7 @@ export function Board({ projectId }: { projectId: string }) {
           <h1 className="truncate text-xl font-semibold tracking-tight">{project?.name ?? ''}</h1>
           <div className="ml-auto flex items-center gap-1">
             <SyncBadge />
+            <Switch label="Sort issues" options={SORTS} value={sort} onChange={changeSort} />
             {issues && (
               <button
                 // Mounting the field inside the tap lets iOS open the keyboard.

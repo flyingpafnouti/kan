@@ -33,7 +33,6 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
     keys: [
       ['↑ ↓ ← →', 'Select an issue'],
       ['Enter', 'Open the issue'],
-      ['Alt ↑ ↓', 'Move the issue up / down'],
       ['Alt ← →', 'Change the status'],
       ['Letter', 'New issue'],
       ['/', 'Search'],

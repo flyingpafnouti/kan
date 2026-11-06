@@ -1,4 +1,4 @@
-import { between, byPosition } from './position'
+import { byPosition } from './position'
 import type { Issue } from './types'
 
 /**
@@ -109,28 +109,6 @@ export function nestColumn(issues: Issue[]): ColumnRow[] {
 
 /** The column in its displayed order. */
 export const nestedOrder = (issues: Issue[]) => nestColumn(issues).map((row) => row.issue)
-
-/** Issues `id` can be reordered against in this column: the rest of its group, or the other top-level issues. */
-export function siblingsIn(column: Issue[], id: string) {
-  const rows = nestColumn(column)
-  const parent = rows.find((row) => row.issue.id === id)?.parent
-  return rows.filter((row) => row.parent === parent).map((row) => row.issue)
-}
-
-/**
- * Position of `issue` once dropped at index `to` of a displayed column. Only its siblings count, so a group follows
- * its parent and a child dropped elsewhere goes back under its own.
- */
-export function positionAt(column: Issue[], issue: Issue, to: number) {
-  const others = column.filter((x) => x.id !== issue.id)
-  const order = siblingsIn([...others.slice(0, to), issue, ...others.slice(to)], issue.id)
-  const i = order.findIndex((x) => x.id === issue.id)
-  if (column.some((x) => x.id === issue.id)) {
-    const before = siblingsIn(column, issue.id)
-    if (before[before.findIndex((x) => x.id === issue.id) - 1]?.id === order[i - 1]?.id) return issue.position
-  }
-  return between(order[i - 1]?.position, order[i + 1]?.position)
-}
 
 function ancestors(issue: Issue, { byId }: IssueIndex) {
   const seen = new Set<string>()
