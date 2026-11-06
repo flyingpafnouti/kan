@@ -4,14 +4,15 @@ import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
 import { storedUserId } from '../lib/supabase'
-import { setImageWidth } from '../lib/images'
+import { ACCEPTED, imageFiles, prepareImage, removeImageLink, setImageWidth } from '../lib/images'
+import { toast } from '../lib/toast'
 import { StatusIcon } from './StatusIcon'
 import { AutoTextarea } from './AutoTextarea'
 import { ResizableMarkdown } from './Markdown'
 import { ModeSwitch, type Mode } from './Switch'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
-import { ChevronIcon } from './icons'
+import { ChevronIcon, ImageIcon } from './icons'
 import { IssueLinks, type LinkPick } from './IssueLinks'
 import { SearchPalette } from './SearchPalette'
 import { blockerCandidates, parentCandidates, type IssueIndex } from '../lib/dependencies'
@@ -72,6 +73,10 @@ export function IssueSheet({
   const links = useRef<HTMLElement>(null)
   const linked = (issue.parent_id && index.byId.has(issue.parent_id)) || index.children.has(issue.id)
   const field = useRef<HTMLTextAreaElement>(null)
+  const picker = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(0)
+  /** Links of the images on their way to the server. */
+  const pending = useRef(new Set<string>())
   /** Where the caret goes on the way to Edit. Unset when the sheet opens: no keyboard popping up on a phone. */
   const caret = useRef<number>(undefined)
   const saved = useRef({ title: issue.title, body: issue.body })
@@ -85,9 +90,11 @@ export function IssueSheet({
   const unmounted = useRef(false)
 
   // Saved once, on close or on the way to a neighbour, rather than while typing.
+  // An image still uploading is left out: its link only goes to the server once the file is there.
   const flush = () => {
     if (ended.current) return
-    const { title: t, body: b } = latest.current
+    const t = latest.current.title
+    const b = [...pending.current].reduce(removeImageLink, latest.current.body)
     const patch: { title?: string; body?: string } = {}
     if (t.trim() && t.trim() !== saved.current.title) patch.title = t.trim()
     if (b !== saved.current.body) patch.body = b
@@ -97,11 +104,13 @@ export function IssueSheet({
     }
   }
   const close = () => {
+    if (uploading) return toast('Image still uploading')
     flush()
     onClose()
   }
   const step = (go?: () => void) => {
     if (!go) return
+    if (uploading) return toast('Image still uploading')
     flush()
     go()
   }
@@ -134,7 +143,58 @@ export function IssueSheet({
     receive(body.trim() ? `${body.trimEnd()}${body.endsWith('\n') ? '' : ' '}${text}` : text)
   })
 
-  const locked = dictation.state !== 'idle' || picking !== null
+  /** At the caret when the text is being edited, at the end otherwise, on its own paragraph. */
+  const insertImage = (link: string) => {
+    const area = field.current
+    const text = latest.current.body
+    const at = area && document.activeElement === area ? area.selectionStart : text.length
+    const before = text.slice(0, at)
+    const after = text.slice(at)
+    const head = `${before}${before && !before.endsWith('\n') ? '\n\n' : ''}${link}`
+    setBody(`${head}${after && !after.startsWith('\n') ? '\n\n' : ''}${after}`)
+    requestAnimationFrame(() => area?.setSelectionRange(head.length, head.length))
+  }
+
+  // Compressed like the images of the notes, and stored in the project's folder so that its members see them.
+  const attachImage = async (file: File) => {
+    if (!navigator.onLine) return toast('Images need a connection')
+    setUploading((n) => n + 1)
+    let link: string | undefined
+    try {
+      const image = await prepareImage(file, issue.project_id)
+      link = image.link
+      pending.current.add(link)
+      insertImage(link)
+      await image.send()
+    } catch (e) {
+      console.warn(e)
+      if (link) setBody((b) => removeImageLink(b, link!))
+      toast('Could not add the image')
+    } finally {
+      if (link) pending.current.delete(link)
+      setUploading((n) => n - 1)
+    }
+  }
+  const attachImages = async (files: File[]) => {
+    for (const file of files) await attachImage(file)
+  }
+
+  // On the document: nothing has the focus when the sheet just opened.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (picking) return
+      const files = imageFiles(e.clipboardData)
+      // Word and Excel also copy a picture of the text: the text is what was meant.
+      if (!files.length || e.clipboardData?.getData('text/plain').trim()) return
+      e.preventDefault()
+      void attachImages(files)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  })
+
+  // An upload also holds the swipe to a neighbour, which would drop its link.
+  const locked = dictation.state !== 'idle' || picking !== null || uploading > 0
   useEffect(() => {
     onLock(locked)
     return () => onLock(false)
@@ -194,6 +254,15 @@ export function IssueSheet({
       <div className={`absolute inset-0 bg-black/40 ${instant ? '' : 'animate-fade'}`} onClick={close} />
       <div
         ref={pane}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+        }}
+        onDrop={(e) => {
+          const files = imageFiles(e.dataTransfer)
+          if (!files.length) return
+          e.preventDefault()
+          void attachImages(files)
+        }}
         className={`swipeable relative ${instant ? '' : 'animate-sheet'} flex max-h-[85dvh] w-full max-w-lg flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900`}
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300 md:hidden dark:bg-neutral-700" />
@@ -234,7 +303,11 @@ export function IssueSheet({
             <ResizableMarkdown
               text={body}
               className="mt-2 min-h-28 text-[15px] text-neutral-700 dark:text-neutral-300"
-              onImageWidth={(path, width) => setBody((b) => setImageWidth(b, path, width))}
+              // The link changes with the width: not while the upload still expects it.
+              onImageWidth={(path, width) => {
+                if (uploading) return toast('Image still uploading')
+                setBody((b) => setImageWidth(b, path, width))
+              }}
               onEditLine={(line) => changeMode('edit', body.split('\n').slice(0, line).join('\n').length + (line ? 1 : 0))}
             />
           ) : (
@@ -255,9 +328,35 @@ export function IssueSheet({
           )}
           <div className="flex items-center justify-between gap-2 py-2">
             <p className="text-xs text-neutral-400">
-              {dictation.state === 'transcribing' ? 'Transcribing…' : `Edited ${formatDate(issue.updated_at)}${editor}`}
+              {uploading
+                ? 'Uploading image…'
+                : dictation.state === 'transcribing'
+                  ? 'Transcribing…'
+                  : `Edited ${formatDate(issue.updated_at)}${editor}`}
             </p>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Add an image"
+                title="Add an image (or paste, or drop)"
+                onClick={() => picker.current?.click()}
+                className="rounded-full p-1.5 text-neutral-300 transition hover:text-neutral-500 dark:text-neutral-600 dark:hover:text-neutral-400"
+              >
+                <ImageIcon width={16} height={16} />
+              </button>
+              <input
+                ref={picker}
+                type="file"
+                // Listing the types rather than image/*: iOS then hands over a JPEG instead of a HEIC.
+                accept={[...ACCEPTED].join(',')}
+                multiple
+                hidden
+                onChange={(e) => {
+                  const files = [...(e.target.files ?? [])].filter((f) => ACCEPTED.has(f.type))
+                  e.target.value = ''
+                  if (files.length) void attachImages(files)
+                }}
+              />
               <ModeSwitch label="Issue mode" value={mode} onChange={(m) => changeMode(m)} />
               {dictationSupported && (
                 <DictationButton dictation={dictation} label="Dictate notes">
@@ -334,6 +433,8 @@ export function IssueSheet({
                 // Kept quiet on purpose: a plain grey label that opens the native project picker.
                 <select
                   value=""
+                  // A link still uploading must not be copied.
+                  disabled={uploading > 0}
                   onChange={(e) => onCopy(e.target.value, { title: title.trim() || issue.title, body })}
                   aria-label="Copy to another project"
                   className="min-w-0 max-w-36 truncate bg-transparent py-1 text-right text-sm text-neutral-400 outline-none hover:text-neutral-600 dark:hover:text-neutral-300"

@@ -115,3 +115,11 @@ export const DrawIcon = (p: P) => (
     <path d="M16 3a2.1 2.1 0 0 1 3 3l-8 8-4 1 1-4z" />
   </svg>
 )
+
+export const ImageIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.5" />
+    <path d="M21 16l-5-5-9 9" />
+  </svg>
+)

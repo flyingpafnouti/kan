@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 /*
  * Images of the notes. The files live in a private Storage bucket and the Markdown only holds their path,
  * as `![image](note-image:<user id>/<uuid>.webp)`, so the database and the local cache stay light.
+ * Those of the issues go under the project's folder instead, `<project id>/<uuid>.webp`, which its members can read.
  */
 export const BUCKET = 'note-images'
 const CACHE = 'note-images'
@@ -14,7 +15,7 @@ const QUALITY = 0.8
 /** Same limit as the bucket (migration 007). */
 const MAX_BYTES = 2 * 1024 * 1024
 /** Bitmaps only: an SVG can carry scripts, and it never goes through the canvas. */
-const ACCEPTED = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/bmp'])
+export const ACCEPTED = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/bmp'])
 
 const PATH = /^note-image:([0-9a-f-]+\/[0-9a-f-]+\.(?:webp|jpg))$/i
 const LINK = /!\[[^\]]*\]\(note-image:[^)\s]+\)/g
@@ -131,13 +132,13 @@ export function imageUrl(path: string) {
 
 /**
  * Gives the Markdown link of an encoded image, already displayable, its path in the bucket, and the upload to run.
- * The link must not be saved before `send` resolves.
+ * The link must not be saved before `send` resolves. Without a folder, the image goes in the user's own.
  */
-export async function prepareEncoded(blob: Blob, label = 'image') {
+export async function prepareEncoded(blob: Blob, label = 'image', folder?: string) {
   const { data } = await supabase.auth.getSession()
   const user = data.session?.user.id
   if (!user) throw new Error('No session')
-  const path = `${user}/${uuid()}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`
+  const path = `${folder ?? user}/${uuid()}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`
   const local = URL.createObjectURL(blob)
   urls.set(path, Promise.resolve(local))
   ready.set(path, local)
@@ -159,8 +160,8 @@ export async function prepareEncoded(blob: Blob, label = 'image') {
 }
 
 /** Compresses the file and gives its link and upload, as prepareEncoded. */
-export async function prepareImage(file: File) {
-  return prepareEncoded(await compress(file))
+export async function prepareImage(file: File, folder?: string) {
+  return prepareEncoded(await compress(file), 'image', folder)
 }
 
 /** Forgets the images on this device, on sign out. */

@@ -225,6 +225,21 @@ create policy "add own note images" on storage.objects
   for insert to authenticated
   with check (bucket_id = 'note-images' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
+-- Images of the issues: same bucket, under the project's folder (<project id>/<file>), open to its members.
+-- By text: a folder is a user id or a project id, and a cast to uuid must not fail on anything else.
+create function public.is_member_folder(folder text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from project_members where project_id::text = folder and user_id = auth.uid())
+$$;
+
+create policy "read project images" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'note-images' and public.is_member_folder((storage.foldername(name))[1]));
+
+create policy "add project images" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'note-images' and public.is_member_folder((storage.foldername(name))[1]));
+
 create policy "mfa satisfied" on public.projects as restrictive
   for all to authenticated
   using ((select public.mfa_satisfied())) with check ((select public.mfa_satisfied()));
