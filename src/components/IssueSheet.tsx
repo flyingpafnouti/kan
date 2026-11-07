@@ -3,7 +3,7 @@ import { PRIORITIES, STATUSES, type Issue, type Priority, type Project, type Sta
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
-import { storedUserId } from '../lib/supabase'
+import { usePseudos } from '../hooks/usePseudos'
 import { ACCEPTED, imageFiles, prepareImage, removeImageLink, setImageWidth } from '../lib/images'
 import { toast } from '../lib/toast'
 import { StatusIcon } from './StatusIcon'
@@ -84,7 +84,9 @@ export function IssueSheet({
   latest.current = { title, body }
   // Only on shared projects, and only once the server knows the author.
   const shared = (projects?.find((p) => p.id === issue.project_id)?.members ?? 1) > 1
-  const editor = shared && issue.updated_by ? (issue.updated_by === storedUserId() ? ' by me' : ' by others') : ''
+  const pseudos = usePseudos()
+  const author = issue.updated_by && pseudos[issue.updated_by]
+  const editor = shared && author ? ` by ${author}` : ''
   /** Deleted: nothing left to save. */
   const ended = useRef(false)
   const unmounted = useRef(false)

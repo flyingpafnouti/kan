@@ -49,6 +49,12 @@ create table public.notes (
   updated_at timestamptz not null default now()
 );
 
+-- A pseudo per account, shown as the author of the last change.
+create table public.profiles (
+  user_id uuid primary key default auth.uid() references auth.users on delete cascade,
+  pseudo  text not null check (char_length(pseudo) between 1 and 40)
+);
+
 create index issues_project_idx on public.issues (project_id, status, position);
 create index issues_parent_idx on public.issues (parent_id) where parent_id is not null;
 create index projects_user_idx on public.projects (user_id, position);
@@ -137,6 +143,27 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from project_members where project_id = pid and user_id = auth.uid())
 $$;
 
+-- Security definer so the profiles policy can look at memberships without recursing into RLS.
+create function public.shares_project(other uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from project_members a join project_members b on a.project_id = b.project_id
+    where a.user_id = auth.uid() and b.user_id = other
+  )
+$$;
+
+-- New accounts start with the part of their email before the @.
+create function public.add_profile() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into profiles (user_id, pseudo) values (new.id, left(coalesce(split_part(new.email, '@', 1), 'user'), 40))
+  on conflict do nothing;
+  return new;
+end $$;
+
+create trigger users_add_profile after insert on auth.users
+for each row execute function public.add_profile();
+
 create function public.add_creator() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -190,6 +217,7 @@ alter table public.projects enable row level security;
 alter table public.project_members enable row level security;
 alter table public.issues   enable row level security;
 alter table public.notes    enable row level security;
+alter table public.profiles enable row level security;
 
 -- The creator check lets a new project pass RLS before the trigger has added its membership.
 create policy "member projects" on public.projects
@@ -211,7 +239,16 @@ create policy "own notes" on public.notes
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
 
-alter publication supabase_realtime add table public.projects, public.project_members, public.issues, public.notes;
+create policy "profiles of my teammates" on public.profiles
+  for select to authenticated
+  using (user_id = (select auth.uid()) or public.shares_project(user_id));
+
+create policy "own profile" on public.profiles
+  for update to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+alter publication supabase_realtime add table public.projects, public.project_members, public.issues, public.notes, public.profiles;
 
 -- Images of the notes: private, each user reaches only their own folder (<user id>/<file>).
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -260,3 +297,7 @@ create policy "mfa satisfied" on storage.objects as restrictive
   for all to authenticated
   using (bucket_id <> 'note-images' or (select public.mfa_satisfied()))
   with check (bucket_id <> 'note-images' or (select public.mfa_satisfied()));
+
+create policy "mfa satisfied" on public.profiles as restrictive
+  for all to authenticated
+  using ((select public.mfa_satisfied())) with check ((select public.mfa_satisfied()));
