@@ -1,0 +1,23 @@
+{
+  "name": "kan-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MCP server giving an agent account access to the issues of the Kan projects it joined",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "join": "tsx src/join.ts",
+    "inspect": "npx @modelcontextprotocol/inspector tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@supabase/supabase-js": "^2.118.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
