@@ -16,6 +16,7 @@ import { PostProcessButton } from './PostProcessButton'
 import { ChevronIcon, ImageIcon } from './icons'
 import { IssueLinks, type LinkPick } from './IssueLinks'
 import { SearchPalette } from './SearchPalette'
+import { SheetGrip, useSheetSize } from './SheetResize'
 import { blockerCandidates, parentCandidates, refTarget, type IssueIndex } from '../lib/dependencies'
 
 /** Title as a heading, then the notes, as Markdown: ready to paste into a chat or a document. */
@@ -79,6 +80,7 @@ export function IssueSheet({
   const [title, setTitle] = useState(issue.title)
   const [body, setBody] = useState(issue.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const sheetSize = useSheetSize('issue-size', pane)
   const issueRef = useMemo<IssueRefLookup>(
     () => (short) => {
       const target = refTarget(short, index)
@@ -86,7 +88,8 @@ export function IssueSheet({
     },
     [index],
   )
-  const [mode, setMode] = useState<Mode>('edit')
+  // Read shows the formatting and the titles of the referenced issues; an empty body is there to be written.
+  const [mode, setMode] = useState<Mode>(() => (issue.body.trim() ? 'read' : 'edit'))
   const [linking, setLinking] = useState(false)
   const [picking, setPicking] = useState<LinkPick | null>(null)
   const links = useRef<HTMLElement>(null)
@@ -275,6 +278,7 @@ export function IssueSheet({
       <div className={`absolute inset-0 bg-black/40 ${instant ? '' : 'animate-fade'}`} onClick={close} />
       <div
         ref={pane}
+        style={sheetSize.style}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes('Files')) e.preventDefault()
         }}
@@ -491,6 +495,7 @@ export function IssueSheet({
             </div>
           </div>
         </div>
+        <SheetGrip {...sheetSize} />
       </div>
     </div>
     {picking && (

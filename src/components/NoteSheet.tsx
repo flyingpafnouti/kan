@@ -1,7 +1,6 @@
-import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import type { Note, NoteKind, Project } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
-import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
 import { imageFiles, prepareImage, removeImageLink, replaceImagePath, setImageWidth } from '../lib/images'
@@ -12,7 +11,8 @@ import { AutoTextarea } from './AutoTextarea'
 import { ModeSwitch, type Mode } from './Switch'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
-import { DrawIcon, GripIcon } from './icons'
+import { DrawIcon } from './icons'
+import { SheetGrip, useSheetSize } from './SheetResize'
 import { KindSwitch } from './KindSwitch'
 
 interface Props {
@@ -28,35 +28,8 @@ interface Props {
   onClose: () => void
 }
 
-type Size = { w: number; h: number }
-
 /** fabric comes with the editor, only once a drawing is opened. */
 const DrawingEditor = lazy(() => import('./DrawingEditor'))
-
-const SIZE_KEY = 'note-size'
-const MIN_W = 320
-const MIN_H = 240
-/** Room kept around the panel, matches md:p-6. */
-const GUTTER = 48
-
-/** Size the user dragged the panel to, kept on this device for the next notes. */
-function storedSize(): Size | null {
-  try {
-    const s = JSON.parse(localStorage.getItem(SIZE_KEY) ?? 'null')
-    return typeof s?.w === 'number' && typeof s?.h === 'number' ? s : null
-  } catch {
-    return null
-  }
-}
-
-function storeSize(s: Size | null) {
-  try {
-    if (s) localStorage.setItem(SIZE_KEY, JSON.stringify(s))
-    else localStorage.removeItem(SIZE_KEY)
-  } catch {
-    /* storage unavailable: the size lasts until the sheet closes */
-  }
-}
 
 export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDelete, onToIssue, onClose }: Props) {
   const [body, setBody] = useState(note.body)
@@ -67,10 +40,8 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
   /** Deleted or turned into an issue: nothing left to save. */
   const ended = useRef(false)
   useScrollLock()
-  const desktop = useMediaQuery('(min-width: 768px) and (pointer: fine)')
-  const [size, setSize] = useState(storedSize)
   const panel = useRef<HTMLDivElement>(null)
-  const drag = useRef<{ x: number; y: number } & Size>(undefined)
+  const sheetSize = useSheetSize('note-size', panel)
   const [uploading, setUploading] = useState(0)
   const [mode, setMode] = useState<Mode>(startEditing ? 'edit' : 'read')
   const field = useRef<HTMLTextAreaElement>(null)
@@ -215,33 +186,6 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
     return () => document.removeEventListener('paste', onPaste)
   })
 
-  // The panel is centered: it grows on both sides, hence twice the pointer move to keep the corner under it.
-  const resize = {
-    onPointerDown: (e: PointerEvent) => {
-      e.preventDefault()
-      e.currentTarget.setPointerCapture(e.pointerId)
-      const r = panel.current!.getBoundingClientRect()
-      drag.current = { x: e.clientX, y: e.clientY, w: r.width, h: r.height }
-    },
-    onPointerMove: (e: PointerEvent) => {
-      const d = drag.current
-      if (!d) return
-      setSize({
-        w: Math.min(innerWidth - GUTTER, Math.max(MIN_W, d.w + 2 * (e.clientX - d.x))),
-        h: Math.min(innerHeight - GUTTER, Math.max(MIN_H, d.h + 2 * (e.clientY - d.y))),
-      })
-    },
-    onPointerUp: () => {
-      drag.current = undefined
-      const r = panel.current!.getBoundingClientRect()
-      storeSize({ w: Math.round(r.width), h: Math.round(r.height) })
-    },
-    onDoubleClick: () => {
-      setSize(null)
-      storeSize(null)
-    },
-  }
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // The drawing editor has its own keys.
@@ -279,11 +223,7 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
           e.preventDefault()
           void attachImages(files)
         }}
-        style={
-          desktop && size
-            ? { width: size.w, height: size.h, maxWidth: `calc(100vw - ${GUTTER}px)`, maxHeight: `calc(100dvh - ${GUTTER}px)` }
-            : undefined
-        }
+        style={sheetSize.style}
         className="relative flex max-h-[85dvh] w-full max-w-lg animate-sheet flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900"
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300 md:hidden dark:bg-neutral-700" />
@@ -381,15 +321,7 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
             Close
           </button>
         </div>
-        {desktop && (
-          <div
-            {...resize}
-            title="Drag to resize, double-click to reset"
-            className="absolute right-0 bottom-0 cursor-nwse-resize touch-none p-1 text-neutral-300 hover:text-neutral-500 dark:text-neutral-600 dark:hover:text-neutral-400"
-          >
-            <GripIcon width={14} height={14} />
-          </div>
-        )}
+        <SheetGrip {...sheetSize} />
       </div>
     </div>
   )
