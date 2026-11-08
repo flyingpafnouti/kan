@@ -98,10 +98,11 @@ end $$;
 create trigger projects_touch before update on public.projects
 for each row execute function public.projects_touch();
 
+-- Security definer so an agent account (is_agent), barred from updating projects, still bumps updated_at.
 create function public.touch_project() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = public as $$
 begin
-  update public.projects set updated_at = now() where id = coalesce(new.project_id, old.project_id);
+  update projects set updated_at = now() where id = coalesce(new.project_id, old.project_id);
   return null;
 end $$;
 
@@ -135,6 +136,13 @@ language sql stable as $$
           and (entry ->> 'timestamp')::bigint > extract(epoch from now() - interval '91 days')
       )
     )
+$$;
+
+-- Accounts flagged with app_metadata.agent (the MCP server's account): no deleting issues, no changing projects, no notes.
+-- Flag one with: update auth.users set raw_app_meta_data = raw_app_meta_data || '{"agent": true}' where email = '...';
+create function public.is_agent() returns boolean
+language sql stable as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'agent')::boolean, false)
 $$;
 
 -- Security definer so policies on projects and issues can check membership without recursing into RLS.
@@ -301,3 +309,27 @@ create policy "mfa satisfied" on storage.objects as restrictive
 create policy "mfa satisfied" on public.profiles as restrictive
   for all to authenticated
   using ((select public.mfa_satisfied())) with check ((select public.mfa_satisfied()));
+
+create policy "not agent" on public.issues as restrictive
+  for delete to authenticated
+  using (not (select public.is_agent()));
+
+create policy "not agent insert" on public.projects as restrictive
+  for insert to authenticated
+  with check (not (select public.is_agent()));
+
+create policy "not agent update" on public.projects as restrictive
+  for update to authenticated
+  using (not (select public.is_agent()));
+
+create policy "not agent delete" on public.projects as restrictive
+  for delete to authenticated
+  using (not (select public.is_agent()));
+
+create policy "not agent" on public.notes as restrictive
+  for all to authenticated
+  using (not (select public.is_agent())) with check (not (select public.is_agent()));
+
+create policy "not agent" on storage.objects as restrictive
+  for insert to authenticated
+  with check (bucket_id <> 'note-images' or not (select public.is_agent()));
