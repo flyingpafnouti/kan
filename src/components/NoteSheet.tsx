@@ -7,7 +7,7 @@ import { imageFiles, prepareImage, removeImageLink, replaceImagePath, setImageWi
 import { loadDrawing, prepareDrawing, type DrawingData } from '../lib/drawings'
 import { toast } from '../lib/toast'
 import { ResizableMarkdown } from './Markdown'
-import { AutoTextarea } from './AutoTextarea'
+import { AutoTextarea, placeCaret, type Caret } from './AutoTextarea'
 import { ModeSwitch, type Mode } from './Switch'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
@@ -45,6 +45,8 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
   const [uploading, setUploading] = useState(0)
   const [mode, setMode] = useState<Mode>(startEditing ? 'edit' : 'read')
   const field = useRef<HTMLTextAreaElement>(null)
+  /** Where a double-click on the rendered note puts the caret; the end of the text otherwise. */
+  const caret = useRef<Caret>(undefined)
   /** Links of the images on their way to the server. */
   const pending = useRef(new Set<string>())
   /** The drawing being edited: a new one, or the path of the one it replaces. */
@@ -168,8 +170,8 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
 
   useEffect(() => {
     if (mode !== 'edit') return
-    field.current?.focus()
-    field.current?.setSelectionRange(body.length, body.length)
+    if (field.current) placeCaret(field.current, caret.current ?? { start: body.length })
+    caret.current = undefined
   }, [mode])
 
   // On the document: nothing has the focus when the sheet just opened on a rendered note.
@@ -240,6 +242,10 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
               onEditDrawing={(path) => {
                 if (uploading) return toast('Image still uploading')
                 void openDrawing(path)
+              }}
+              onEditAt={(at) => {
+                caret.current = at
+                setMode('edit')
               }}
             />
           ) : (

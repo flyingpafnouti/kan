@@ -395,10 +395,42 @@ function diagramAt(target: HTMLElement) {
   return svg && { svg: svg.outerHTML, source: svg.closest<HTMLElement>('.mermaid-diagram')!.dataset.source! }
 }
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Where a double-click on the rendered text points in the source: the word it selected, found again among
+ * the source lines of its block, the same number of times over; the start of the block when that fails.
+ */
+function sourceSelection(text: string, root: HTMLElement, target: HTMLElement) {
+  const block = target.closest<HTMLElement>('[data-line]')
+  if (!block || !root.contains(block)) return undefined
+  const lines = text.split('\n')
+  const first = Number(block.dataset.line)
+  const next = Math.min(
+    lines.length,
+    ...[...root.querySelectorAll<HTMLElement>('[data-line]')].map((x) => Number(x.dataset.line)).filter((n) => n > first),
+  )
+  const blockStart = lines.slice(0, first).join('\n').length + (first ? 1 : 0)
+  const source = lines.slice(first, next).join('\n')
+  const selection = getSelection()
+  const word = selection?.toString().trim()
+  if (!selection?.rangeCount || !word || /\s/.test(word)) return { start: blockStart }
+  const before = document.createRange()
+  before.setStart(block, 0)
+  before.setEnd(selection.getRangeAt(0).startContainer, selection.getRangeAt(0).startOffset)
+  const pattern = `(?<![\\p{L}\\p{N}_])${escapeRegExp(word)}(?![\\p{L}\\p{N}_])`
+  const nth = before.toString().match(new RegExp(pattern, 'gu'))?.length ?? 0
+  const found = [...source.matchAll(new RegExp(pattern, 'gu'))]
+  const match = found[nth] ?? found[0]
+  if (!match) return { start: blockStart }
+  return { start: blockStart + match.index, end: blockStart + match.index + word.length }
+}
+
 /**
  * Rendered Markdown whose images and diagrams open full screen on a click. Images resize from a grip
  * in their corner, where a double-click resets them. With onEditLine, diagrams get a pencil towards their source,
- * and with onEditDrawing, drawings get a pencil that opens them in the editor.
+ * and with onEditDrawing, drawings get a pencil that opens them in the editor. With onEditAt, a double-click
+ * on the text gives the selection it points to in the source, and its height in the viewport.
  */
 export function ResizableMarkdown({
   text,
@@ -406,6 +438,7 @@ export function ResizableMarkdown({
   onImageWidth,
   onEditLine,
   onEditDrawing,
+  onEditAt,
   issueRef,
   onOpenIssue,
 }: {
@@ -414,6 +447,7 @@ export function ResizableMarkdown({
   onImageWidth: (path: string, width: number | null) => void
   onEditLine?: (line: number) => void
   onEditDrawing?: (path: string) => void
+  onEditAt?: (caret: { start: number; end?: number; y: number }) => void
   /** Shows `#a1b2c3d4` references as their issue's title, which opens it through onOpenIssue. */
   issueRef?: IssueRefLookup
   onOpenIssue?: (id: string) => void
@@ -468,7 +502,12 @@ export function ResizableMarkdown({
         }}
         onDoubleClick={(e) => {
           const handle = grip(e)
-          if (handle) onImageWidth(pathOf(handle.parentElement!), null)
+          if (handle) return onImageWidth(pathOf(handle.parentElement!), null)
+          const target = e.target as HTMLElement
+          // These already do something on a click.
+          if (!onEditAt || target.closest('a, button, .note-image, .mermaid-block, .mermaid-placeholder')) return
+          const at = sourceSelection(text, e.currentTarget, target)
+          if (at) onEditAt({ ...at, y: e.clientY })
         }}
       />
     </>

@@ -44,6 +44,54 @@ function fit(el: HTMLTextAreaElement) {
   el.style.overflowY = el.scrollHeight > el.clientHeight + 1 ? 'auto' : 'hidden'
 }
 
+/** A selection to give the field, and the height in the viewport where it should show. */
+export type Caret = { start: number; end?: number; y?: number }
+
+const MIRRORED = [
+  'boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth',
+  'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'fontFamily', 'fontSize', 'fontWeight',
+  'fontStyle', 'letterSpacing', 'lineHeight', 'textTransform', 'wordSpacing', 'tabSize',
+] as const
+
+/** Top of the line holding `pos`, from the top of the field's content, measured on a copy of the field. */
+function lineTop(el: HTMLTextAreaElement, pos: number) {
+  const style = getComputedStyle(el)
+  const mirror = document.createElement('div')
+  for (const key of MIRRORED) mirror.style[key] = style[key]
+  Object.assign(mirror.style, {
+    position: 'absolute',
+    top: '0',
+    left: '-9999px',
+    visibility: 'hidden',
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'break-word',
+  })
+  mirror.textContent = el.value.slice(0, pos)
+  const marker = mirror.appendChild(document.createElement('span'))
+  marker.textContent = '​'
+  document.body.appendChild(mirror)
+  const top = marker.offsetTop
+  mirror.remove()
+  return top
+}
+
+/** Focuses the field on the selection, scrolling what holds it so that the selection shows at `y`. */
+export function placeCaret(el: HTMLTextAreaElement, { start, end = start, y }: Caret) {
+  if (y === undefined) {
+    el.focus()
+    el.setSelectionRange(start, end)
+    return
+  }
+  el.focus({ preventScroll: true })
+  el.setSelectionRange(start, end)
+  let scroller = el.parentElement
+  while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement
+  if (!scroller) return
+  const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 0
+  const at = el.getBoundingClientRect().top - el.scrollTop + lineTop(el, start) + lineHeight / 2
+  scroller.scrollTop += at - y
+}
+
 /** Textarea that grows with its content. */
 export function AutoTextarea({ value, onChange, commands, className, ref, ...rest }: Props) {
   const own = useRef<HTMLTextAreaElement>(null)

@@ -8,7 +8,7 @@ import { usePseudos } from '../hooks/usePseudos'
 import { ACCEPTED, imageFiles, prepareImage, removeImageLink, setImageWidth } from '../lib/images'
 import { toast } from '../lib/toast'
 import { StatusIcon } from './StatusIcon'
-import { AutoTextarea } from './AutoTextarea'
+import { AutoTextarea, placeCaret, type Caret } from './AutoTextarea'
 import { ResizableMarkdown } from './Markdown'
 import { ModeSwitch, type Mode } from './Switch'
 import { DictationButton } from './DictationButton'
@@ -100,7 +100,7 @@ export function IssueSheet({
   /** Links of the images on their way to the server. */
   const pending = useRef(new Set<string>())
   /** Where the caret goes on the way to Edit. Unset when the sheet opens: no keyboard popping up on a phone. */
-  const caret = useRef<number>(undefined)
+  const caret = useRef<Caret>(undefined)
   const saved = useRef({ title: issue.title, body: issue.body })
   const latest = useRef({ title, body })
   latest.current = { title, body }
@@ -224,14 +224,13 @@ export function IssueSheet({
     return () => onLock(false)
   }, [locked, onLock])
 
-  const changeMode = (next: Mode, at = body.length) => {
+  const changeMode = (next: Mode, at: Caret = { start: body.length }) => {
     if (next === 'edit') caret.current = at
     setMode(next)
   }
   useEffect(() => {
     if (mode !== 'edit' || caret.current === undefined) return
-    field.current?.focus()
-    field.current?.setSelectionRange(caret.current, caret.current)
+    if (field.current) placeCaret(field.current, caret.current)
     caret.current = undefined
   }, [mode])
 
@@ -333,7 +332,10 @@ export function IssueSheet({
                 if (uploading) return toast('Image still uploading')
                 setBody((b) => setImageWidth(b, path, width))
               }}
-              onEditLine={(line) => changeMode('edit', body.split('\n').slice(0, line).join('\n').length + (line ? 1 : 0))}
+              onEditLine={(line) =>
+                changeMode('edit', { start: body.split('\n').slice(0, line).join('\n').length + (line ? 1 : 0) })
+              }
+              onEditAt={(at) => changeMode('edit', at)}
               issueRef={issueRef}
               onOpenIssue={(id) => step(() => onOpenIssue(id))}
             />
