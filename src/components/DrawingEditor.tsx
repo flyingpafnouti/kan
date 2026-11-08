@@ -7,6 +7,7 @@ import {
   FabricImage,
   Group,
   IText,
+  Path,
   PencilBrush,
   Point as FabricPoint,
   Rect,
@@ -24,11 +25,14 @@ import {
   anchorAt,
   connectorEnd,
   describeDrawing,
+  connectorNear,
+  edgeLabelFor,
   drawAnchors,
   ensureId,
   follow,
   hoveredAnchorable,
   isConnector,
+  type Linked,
   isClosed,
   isLabel,
   labelFor,
@@ -81,6 +85,8 @@ const fontReady = new FontFace(HANDWRITING, `url(${handwritingUrl})`)
   .catch((err) => console.warn(err))
 /** Margin around the drawing in its preview, and around a reopened drawing on the sheet. */
 const PAD = 16
+/** How far from an arrow's line a double-click still takes it, in pixels on screen. */
+const LINE_REACH = 14
 /** A shape smaller than this was a click, not a drag. */
 const MIN_DRAG = 4
 
@@ -490,12 +496,15 @@ export default function DrawingEditor({
       commit()
     })
     c.on('mouse:out', () => setHover(null))
-    c.on('mouse:dblclick', ({ target, scenePoint }: TPointerEventInfo) => {
+    c.on('mouse:dblclick', ({ target: hit, scenePoint }: TPointerEventInfo) => {
+      // Missing everything, near an arrow: its line is thin, the click is taken for it.
+      const target = hit ?? (current.current.tool === 'select' ? connectorNear(c, scenePoint, LINE_REACH / c.getZoom()) : undefined)
       if (!target) return
       if (isMath(target)) return openMath(target, scenePoint)
-      // A closed shape takes a text in its middle.
-      if (isClosed(target)) {
-        const label = labelFor(c, target, FONT, current.current.fontSize)
+      // A closed shape takes a text in its middle, an arrow one on its line.
+      if (isClosed(target) || (isConnector(target) && target instanceof Path)) {
+        const { fontSize } = current.current
+        const label = target instanceof Path ? edgeLabelFor(c, target, FONT, fontSize) : labelFor(c, target, FONT, fontSize)
         c.setActiveObject(label)
         label.enterEditing()
         label.selectAll()
@@ -518,6 +527,17 @@ export default function DrawingEditor({
       releaseMoved(target)
       follow(c, target)
       commit()
+    })
+    // A label of an arrow stays centered on its spot while it is typed: its width changes, its center does not.
+    const spots = new WeakMap<object, FabricPoint>()
+    c.on('text:editing:entered', ({ target }) => {
+      if ((target as Linked).edgeOf) spots.set(target, target.getCenterPoint())
+    })
+    c.on('text:changed', ({ target }) => {
+      const spot = spots.get(target)
+      if (!spot) return
+      target.setPositionByOrigin(spot, 'center', 'center')
+      target.setCoords()
     })
     c.on('text:editing:exited', ({ target }) => {
       // A text left empty goes away.

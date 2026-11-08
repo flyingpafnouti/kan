@@ -1,4 +1,4 @@
-import { Ellipse, FabricImage, FabricText, Group, Path, Point, Rect, Textbox, util, type Canvas, type FabricObject } from 'fabric'
+import { Ellipse, FabricImage, FabricText, Group, IText, Path, Point, Rect, Textbox, util, type Canvas, type FabricObject } from 'fabric'
 import { uuid } from '../lib/id'
 
 /*
@@ -199,16 +199,21 @@ export function makeConnector(kind: 'line' | 'arrow', a: Pt, b: Pt, stroke: stri
   return path
 }
 
-/** Both ends of a connector in scene coordinates, read from its path: right after any move or scale. */
-function connectorEnds(o: Path) {
+/** The line of a connector in scene coordinates, from its start to its end, read from its path: right after any move or scale. */
+export function connectorPoints(o: Path) {
   const commands = o.path as unknown as [string, number, number][]
   // The line comes first; an arrow's head is a second subpath, after its own M.
   const head = commands.findIndex((cmd, i) => i > 0 && cmd[0] === 'M')
-  const m = commands[0]
-  const l = commands[(head < 0 ? commands.length : head) - 1]
   const matrix = o.calcTransformMatrix()
-  const at = (x: number, y: number) => util.transformPoint(new Point(x - o.pathOffset.x, y - o.pathOffset.y), matrix)
-  return [at(m[1], m[2]), at(l[1], l[2])]
+  return commands
+    .slice(0, head < 0 ? commands.length : head)
+    .map(([, x, y]) => util.transformPoint(new Point(x - o.pathOffset.x, y - o.pathOffset.y), matrix))
+}
+
+/** Both ends of a connector in scene coordinates. */
+function connectorEnds(o: Path) {
+  const points = connectorPoints(o)
+  return [points[0], points[points.length - 1]]
 }
 
 /** Draws the connector again between its anchors, in place of the old one, at the same depth. */
@@ -308,6 +313,50 @@ export function labelFor(c: Canvas, shape: FabricObject, font: string, fontSize:
   Object.assign(label, { id: uuid(), labelOf: ensureId(shape) })
   placeLabel(label, shape)
   c.insertAt(c.getObjects().indexOf(shape) + 1, label)
+  return label
+}
+
+/** The connector passing within `reach` scene pixels of p, the topmost: a thin line is hard to hit with the pointer. */
+export function connectorNear(c: Canvas, p: Point, reach: number) {
+  const distance = (a: Point, b: Point) => {
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const t = dx || dy ? Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy))) : 0
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
+  }
+  const connectors = c.getObjects().filter((o): o is Path => o instanceof Path && isConnector(o))
+  return connectors.reverse().find((o) => {
+    const points = connectorPoints(o)
+    return points.some((q, i) => i > 0 && distance(points[i - 1], q) <= reach)
+  })
+}
+
+/** The label of a connector: made the first time, at the middle of its line; returned ready to edit. */
+export function edgeLabelFor(c: Canvas, connector: Path, font: string, fontSize: number) {
+  const id = ensureId(connector)
+  const existing = c.getObjects().find((o): o is IText => o instanceof IText && linked(o).edgeOf === id)
+  if (existing) return existing
+  // Halfway along the line, not between its ends: an elbow's middle is on its own route.
+  const points = connectorPoints(connector)
+  const lengths = points.map((p, i) => (i ? p.distanceFrom(points[i - 1]) : 0))
+  let rest = lengths.reduce((a, b) => a + b, 0) / 2
+  let i = 1
+  while (i < points.length - 1 && rest > lengths[i]) rest -= lengths[i++]
+  const k = lengths[i] ? Math.min(1, rest / lengths[i]) : 0
+  const at = new Point(points[i - 1].x + (points[i].x - points[i - 1].x) * k, points[i - 1].y + (points[i].y - points[i - 1].y) * k)
+  const label = new IText('', {
+    left: at.x,
+    top: at.y,
+    originX: 'center',
+    originY: 'center',
+    fontFamily: font,
+    fontSize: Math.max(8, Math.round(fontSize * 0.85)),
+    fill: (connector.stroke as string) || '#1e1e1e',
+    // On its line, which it hides behind the text.
+    textBackgroundColor: 'white',
+  })
+  Object.assign(label, { id: uuid(), edgeOf: id })
+  c.add(label)
   return label
 }
 
