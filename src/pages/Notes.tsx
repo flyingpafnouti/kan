@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { clearPendingOpen, getPendingOpen, navigate } from '../lib/router'
 import { toast } from '../lib/toast'
-import type { NoteKind } from '../lib/types'
+import { noteTooLong, type NoteKind } from '../lib/types'
 import { useNotes } from '../hooks/useNotes'
 import { useProjectList } from '../hooks/useProjects'
 import { useDesktopSearch } from '../hooks/useDesktopSearch'
@@ -91,6 +91,7 @@ export function Notes({
   function submit(e?: FormEvent) {
     e?.preventDefault()
     const t = draft.trim()
+    if (noteTooLong(t)) return
     setDraft('')
     if (!t) return
     const id = add(t, view)

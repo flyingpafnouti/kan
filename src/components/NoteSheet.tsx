@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import type { Note, NoteKind, Project } from '../lib/types'
+import { noteTooLong, type Note, type NoteKind, type Project } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useScrollLock } from '../hooks/useScrollLock'
 import { formatDate } from '../lib/date'
@@ -57,7 +57,7 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
   // An image still uploading is left out: its link only goes to the server once the file is there.
   const flush = () => {
     const b = [...pending.current].reduce(removeImageLink, latest.current)
-    if (ended.current || !b.trim() || b === saved.current) return
+    if (ended.current || !b.trim() || b === saved.current || noteTooLong(b)) return
     saved.current = b
     onSave(b)
   }
@@ -66,6 +66,8 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
   }
   const close = () => {
     if (uploading) return toast('Image still uploading')
+    // Kept open so the text is not lost: the server would reject it.
+    if (noteTooLong(body)) return
     if (!body.trim()) {
       end()
       return onDelete()

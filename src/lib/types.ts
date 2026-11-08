@@ -1,3 +1,5 @@
+import { toast } from './toast'
+
 export type Status = 'todo' | 'doing' | 'done'
 
 export const STATUSES: { id: Status; label: string }[] = [
@@ -77,6 +79,16 @@ export const NOTE_KINDS: { id: NoteKind; label: string }[] = [
   { id: 'pro', label: 'Pro' },
   { id: 'perso', label: 'Perso' },
 ]
+
+/** Longest note body the server accepts (check on notes.body, migration 015). */
+export const NOTE_MAX_LENGTH = 100_000
+
+/** Says so and returns true when the note is too long for the server, which would reject it and lose it. */
+export function noteTooLong(body: string) {
+  if (body.length <= NOTE_MAX_LENGTH) return false
+  toast(`Note too long: ${body.length.toLocaleString()} / ${NOTE_MAX_LENGTH.toLocaleString()} characters`, { duration: 6000 })
+  return true
+}
 
 export interface Note {
   id: string
