@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Issue, Status } from '../lib/types'
-import { nestColumn, type CardLinks } from '../lib/dependencies'
+import { nestColumn, type CardLinks, type IssueIndex } from '../lib/dependencies'
 import { IssueCard, SortableIssueCard } from './IssueCard'
 import { ChevronIcon } from './icons'
 
@@ -21,11 +21,13 @@ interface Props {
   projectName?: (issue: Issue) => string | undefined
   /** Blockers and parent of each card. */
   links?: (issue: Issue) => CardLinks | undefined
+  /** Issues known to the view, to show the references in a card's notes as titles. */
+  index?: IssueIndex
   /** Issue selected with the keyboard. */
   selected?: string | null
 }
 
-export function Column({ status, issues, title, header, empty, archived, onOpen, onStatus, projectName, links, selected }: Props) {
+export function Column({ status, issues, title, header, empty, archived, onOpen, onStatus, projectName, links, index, selected }: Props) {
   const { setNodeRef } = useDroppable({ id: status })
   const [showArchived, setShowArchived] = useState(false)
   return (
@@ -50,6 +52,7 @@ export function Column({ status, issues, title, header, empty, archived, onOpen,
                 issue={issue}
                 project={projectName?.(issue)}
                 links={shown}
+                index={index}
                 depth={depth}
                 selected={issue.id === selected}
                 onOpen={() => onOpen(issue.id)}
@@ -80,6 +83,7 @@ export function Column({ status, issues, title, header, empty, archived, onOpen,
                         issue={issue}
                         project={projectName?.(issue)}
                         links={links?.(issue)}
+                        index={index}
                         onOpen={() => onOpen(issue.id)}
                         onStatus={(s) => onStatus(issue.id, s)}
                       />

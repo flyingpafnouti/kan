@@ -3,7 +3,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { PRIORITIES, type Issue, type Status } from '../lib/types'
 import { StatusIcon } from './StatusIcon'
 import { hideDiagrams } from '../lib/format'
-import type { CardLinks } from '../lib/dependencies'
+import { refsToTitles, type CardLinks, type IssueIndex } from '../lib/dependencies'
 
 const NEXT: Record<Status, Status> = { todo: 'doing', doing: 'done', done: 'todo' }
 
@@ -18,13 +18,15 @@ interface Props {
   selected?: boolean
   /** Blockers and parent, absent on an issue without links. */
   links?: CardLinks
+  /** Issues known to the view: references in the notes show as their titles. */
+  index?: IssueIndex
   /** Levels of indentation under the parent, in a column. */
   depth?: number
 }
 
 const INDENT_PX = 16
 
-export function IssueCard({ issue, onOpen, onStatus, overlay, project, selected, links }: Props) {
+export function IssueCard({ issue, onOpen, onStatus, overlay, project, selected, links, index }: Props) {
   const done = issue.status === 'done'
   const priority = PRIORITIES.find((p) => p.id === issue.priority)
   return (
@@ -49,7 +51,7 @@ export function IssueCard({ issue, onOpen, onStatus, overlay, project, selected,
         <p className={`text-[15px] leading-snug break-words ${done ? 'text-neutral-400 line-through' : ''}`}>
           {issue.title}
         </p>
-        {issue.body && <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{hideDiagrams(issue.body)}</p>}
+        {issue.body && <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{index ? refsToTitles(hideDiagrams(issue.body), index) : hideDiagrams(issue.body)}</p>}
         {project && <p className="mt-1.5 truncate text-xs font-medium text-accent/80">{project}</p>}
         {links && links.total > 0 && (
           <p className={`mt-1.5 text-xs font-medium tabular-nums ${links.done < links.total ? 'text-neutral-500' : 'text-accent'}`}>

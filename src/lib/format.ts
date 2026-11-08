@@ -150,6 +150,38 @@ export function hideDiagrams(body: string): string {
   return body.replace(/^[ \t]*(`{3,}|~{3,})[ \t]*mermaid\b.*(?:\n[\s\S]*?(?:^[ \t]*\1[`~]*[ \t]*$|$(?![\s\S]))|$)/gm, 'Diagram')
 }
 
-export function renderMarkdown(src: string, diagrams: DiagramMode): string {
-  return md.render(src, { diagrams })
+/** What a `#a1b2c3d4` reference shows instead of the id; undefined leaves it as text. */
+export type IssueRefLookup = (short: string) => { id: string; title: string; done: boolean } | undefined
+
+const ISSUE_REF = /#([0-9a-f]{8})(?![\w-])/y
+
+/** An issue reference written by the MCP agent, shown as the issue's title when the view knows it (env.issueRef). */
+function issueRef(state: StateInline, silent: boolean): boolean {
+  const lookup = (state.env as { issueRef?: IssueRefLookup }).issueRef
+  const { src, pos } = state
+  if (!lookup || src.charCodeAt(pos) !== 0x23 || /[\w&#]/.test(src[pos - 1] ?? '')) return false
+  ISSUE_REF.lastIndex = pos
+  const m = ISSUE_REF.exec(src)
+  const target = m && lookup(m[1])
+  if (!target) return false
+  if (!silent) {
+    const token = state.push('issue_ref', '', 0)
+    token.content = m[0]
+    token.meta = target
+  }
+  state.pos += m[0].length
+  return true
+}
+
+md.inline.ruler.push('issue_ref', issueRef)
+md.renderer.rules.issue_ref = (tokens, i) => {
+  const { id, title, done } = tokens[i].meta as NonNullable<ReturnType<IssueRefLookup>>
+  return (
+    `<button type="button" class="issue-ref${done ? ' done' : ''}" data-issue="${escape(id)}" ` +
+    `title="${escape(tokens[i].content)}">${escape(title)}</button>`
+  )
+}
+
+export function renderMarkdown(src: string, diagrams: DiagramMode, issueRef?: IssueRefLookup): string {
+  return md.render(src, { diagrams, issueRef })
 }

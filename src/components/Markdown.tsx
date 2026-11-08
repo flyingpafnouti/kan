@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { createPortal } from 'react-dom'
 import { focusNode, nodeAt, nodeNotes } from '../lib/diagramFocus'
-import { renderMarkdown, type DiagramMode } from '../lib/format'
+import { renderMarkdown, type DiagramMode, type IssueRefLookup } from '../lib/format'
 import { imageUrl } from '../lib/images'
 import type { DiagramLayout, DiagramLink } from '../lib/mermaid'
 import { useTheme } from '../lib/theme'
@@ -22,11 +22,12 @@ async function copyCode(button: Element) {
 export function Markdown({
   text,
   diagrams = 'hidden',
+  issueRef,
   className = '',
   onClick,
   ...rest
-}: { text: string; diagrams?: DiagramMode } & Omit<ComponentProps<'div'>, 'children'>) {
-  const html = useMemo(() => renderMarkdown(text, diagrams), [text, diagrams])
+}: { text: string; diagrams?: DiagramMode; issueRef?: IssueRefLookup } & Omit<ComponentProps<'div'>, 'children'>) {
+  const html = useMemo(() => renderMarkdown(text, diagrams, issueRef), [text, diagrams, issueRef])
   const ref = useRef<HTMLDivElement>(null)
   const theme = useTheme()
   useEffect(() => {
@@ -405,12 +406,17 @@ export function ResizableMarkdown({
   onImageWidth,
   onEditLine,
   onEditDrawing,
+  issueRef,
+  onOpenIssue,
 }: {
   text: string
   className: string
   onImageWidth: (path: string, width: number | null) => void
   onEditLine?: (line: number) => void
   onEditDrawing?: (path: string) => void
+  /** Shows `#a1b2c3d4` references as their issue's title, which opens it through onOpenIssue. */
+  issueRef?: IssueRefLookup
+  onOpenIssue?: (id: string) => void
 }) {
   const drag = useRef<{ x: number; width: number; limit: number; frame: HTMLElement; moved: boolean }>(undefined)
   const [zoom, setZoom] = useState<string | null>(null)
@@ -424,9 +430,12 @@ export function ResizableMarkdown({
       <Markdown
         text={text}
         diagrams={onEditLine ? 'editable' : 'shown'}
+        issueRef={issueRef}
         className={`resizable ${onEditDrawing ? 'drawings-editable ' : ''}${className}`}
         onClick={(e) => {
           const target = e.target as HTMLElement
+          const ref = target.closest<HTMLElement>('.issue-ref')
+          if (ref) return onOpenIssue?.(ref.dataset.issue!)
           if (target.closest('.mermaid-edit')) {
             return onEditLine?.(Number(target.closest<HTMLElement>('[data-line]')!.dataset.line))
           }

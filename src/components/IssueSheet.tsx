@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import type { IssueRefLookup } from '../lib/format'
 import { PRIORITIES, STATUSES, type Issue, type Priority, type Project, type Status } from '../lib/types'
 import { dictationSupported, useDictation } from '../hooks/useDictation'
 import { useScrollLock } from '../hooks/useScrollLock'
@@ -15,7 +16,7 @@ import { PostProcessButton } from './PostProcessButton'
 import { ChevronIcon, ImageIcon } from './icons'
 import { IssueLinks, type LinkPick } from './IssueLinks'
 import { SearchPalette } from './SearchPalette'
-import { blockerCandidates, parentCandidates, type IssueIndex } from '../lib/dependencies'
+import { blockerCandidates, parentCandidates, refTarget, type IssueIndex } from '../lib/dependencies'
 
 /** Title as a heading, then the notes, as Markdown: ready to paste into a chat or a document. */
 async function copyIssue(title: string, body: string) {
@@ -78,6 +79,13 @@ export function IssueSheet({
   const [title, setTitle] = useState(issue.title)
   const [body, setBody] = useState(issue.body)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const issueRef = useMemo<IssueRefLookup>(
+    () => (short) => {
+      const target = refTarget(short, index)
+      return target && { id: target.id, title: target.title, done: target.status === 'done' }
+    },
+    [index],
+  )
   const [mode, setMode] = useState<Mode>('edit')
   const [linking, setLinking] = useState(false)
   const [picking, setPicking] = useState<LinkPick | null>(null)
@@ -322,6 +330,8 @@ export function IssueSheet({
                 setBody((b) => setImageWidth(b, path, width))
               }}
               onEditLine={(line) => changeMode('edit', body.split('\n').slice(0, line).join('\n').length + (line ? 1 : 0))}
+              issueRef={issueRef}
+              onOpenIssue={(id) => step(() => onOpenIssue(id))}
             />
           ) : (
             <AutoTextarea

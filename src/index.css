@@ -109,6 +109,24 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* A reference to another issue, shown as its title (renderMarkdown, issueRef). */
+.md .issue-ref {
+  display: inline;
+  padding: 0;
+  font: inherit;
+  text-align: inherit;
+  color: var(--color-accent);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.md .issue-ref:hover {
+  text-decoration-style: solid;
+}
+.md .issue-ref.done {
+  color: var(--color-neutral-400);
+  text-decoration: line-through;
+}
 .md img {
   max-height: 24rem;
   border-radius: 0.5em;

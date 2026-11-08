@@ -169,6 +169,7 @@ export function Board({ projectId }: { projectId: string }) {
     },
     onStatus: setStatus,
     links: (issue: Issue) => linksOf(issue, index),
+    index,
     selected,
   }
 
@@ -272,7 +273,7 @@ export function Board({ projectId }: { projectId: string }) {
             </div>
           )}
           <DragOverlay>
-            {dragStart && find(dragStart.id) && <IssueCard issue={find(dragStart.id)!} links={linksOf(find(dragStart.id)!, index)} overlay />}
+            {dragStart && find(dragStart.id) && <IssueCard issue={find(dragStart.id)!} links={linksOf(find(dragStart.id)!, index)} index={index} overlay />}
           </DragOverlay>
         </DndContext>
       )}

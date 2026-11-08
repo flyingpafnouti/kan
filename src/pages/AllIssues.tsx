@@ -100,6 +100,7 @@ export function AllIssues() {
     onStatus: setStatus,
     projectName: name,
     links: (issue: Issue) => linksOf(issue, index),
+    index,
     selected,
   }
 

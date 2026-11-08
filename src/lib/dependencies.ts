@@ -9,7 +9,19 @@ export interface IssueIndex {
   byId: Map<string, Issue>
   /** Open issues first, then in board order. */
   children: Map<string, Issue[]>
+  /** By the first 8 characters of the id; null when two issues share them. */
+  byShort: Map<string, Issue | null>
 }
+
+/** `#` and the first 8 characters of an issue id, as the MCP agent writes them in a body. */
+const ISSUE_REF = /(?<![\w&#])#([0-9a-f]{8})(?![\w-])/g
+
+/** The issue a reference names, if the index knows it. */
+export const refTarget = (short: string, { byShort }: IssueIndex) => byShort.get(short) ?? undefined
+
+/** Text with each known reference replaced by its issue's title, for plain-text previews. */
+export const refsToTitles = (text: string, index: IssueIndex) =>
+  text.replace(ISSUE_REF, (ref, short: string) => refTarget(short, index)?.title ?? ref)
 
 /** What a card tells about its links. */
 export interface CardLinks {
@@ -53,7 +65,12 @@ export function indexIssues(issues: Issue[]): IssueIndex {
   for (const siblings of children.values()) {
     siblings.sort((a, b) => Number(isDone(a)) - Number(isDone(b)) || byPosition(a, b))
   }
-  return { byId, children }
+  const byShort = new Map<string, Issue | null>()
+  for (const issue of issues) {
+    const short = issue.id.slice(0, 8)
+    byShort.set(short, byShort.has(short) ? null : issue)
+  }
+  return { byId, children, byShort }
 }
 
 /** Undefined when the card has nothing to add: no links, or a finished issue. */
