@@ -34,7 +34,8 @@ export function issueDetail({ issue, project, parent, blockers, editor }: IssueD
     `id: ${issue.id}`,
     `project: ${project.name}`,
     `status: ${statusLabel(issue.status)} · priority: ${priority(issue.priority)}`,
-    `created: ${issue.created_at} · updated: ${issue.updated_at}${editor ? ` by ${editor}` : ''}${issue.done_at ? ` · done: ${issue.done_at}` : ''}`,
+    `created: ${issue.created_at}${issue.done_at ? ` · done: ${issue.done_at}` : ''}`,
+    `updated_at: ${issue.updated_at}${editor ? ` by ${editor}` : ''}`,
   ]
   if (parent) lines.push(`unblocks: ${issueLine(parent)}`)
   if (blockers.length) {

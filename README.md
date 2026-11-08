@@ -9,7 +9,7 @@ Suivi d'issues minimaliste en Kanban (To do / In progress / Done), synchronisé 
 3. Compte : le même que pour cine.
 4. Les inscriptions restent ouvertes car le projet est partagé avec cine. Un inconnu peut donc créer un compte, mais la RLS ne lui laisse voir que ses notes et les projets dont il est membre.
 5. Authentication > URL Configuration : laisser la Site URL de cine. La connexion se fait par mot de passe, sans lien envoyé par mail, donc cette URL ne sert pas ici.
-6. Compte agent (serveur MCP) : `claude@kan-agent.local`, pseudo Claude, marqué `app_metadata.agent`. La migration `013_agent_account.sql` lui interdit côté base de supprimer une issue, de créer, modifier ou supprimer un projet, et de toucher aux notes et à leurs images. Voir « Serveur MCP ».
+6. Compte agent (serveur MCP) : `claude@kan-agent.local`, pseudo Claude, marqué `app_metadata.agent`. La migration `013_agent_account.sql` lui interdit côté base de supprimer une issue, de créer, modifier ou supprimer un projet, et de toucher aux notes et à leurs images. La migration `014_issue_body_history.sql` garde les versions des notes d'issue qu'il remplace. Voir « Serveur MCP ».
 
 ## Serveur MCP
 
@@ -22,7 +22,12 @@ claude mcp add --scope user kan -- /home/gpriser/kan/mcp/node_modules/.bin/tsx /
 
 - Identifiants : `~/.config/kan-mcp/agent.env` (`KAN_AGENT_EMAIL`, `KAN_AGENT_PASSWORD`, droits 600, hors dépôt). L'URL Supabase et la clé publishable viennent de `.env`. Le serveur refuse de démarrer avec un compte non marqué agent.
 - Ouvrir un projet à l'agent : « Share link » dans l'app, puis `cd mcp && npm run join -- '<lien>'`. Ne lui ouvrir que des projets dont on écrit soi-même les issues : leur texte arrive tel quel dans le contexte de l'agent.
-- Outils : `list_projects`, `list_issues`, `get_issue`, `search_issues`, `create_issue`, `update_issue`, `append_to_issue`, `claim_issue`. Une issue se désigne par les 8 premiers caractères de son id (`#a1b2c3d4`). `claim_issue` ne passe une issue en In progress que si elle est encore en To do. `append_to_issue` ajoute une section signée et datée à la fin des notes, sans écraser une modification faite entre-temps. Rien ne permet de supprimer.
+- Outils : `list_projects`, `list_issues`, `get_issue`, `search_issues`, `create_issue`, `update_issue`, `append_to_issue`, `edit_issue_body`, `claim_issue`. Une issue se désigne par les 8 premiers caractères de son id (`#a1b2c3d4`). `claim_issue` ne passe une issue en In progress que si elle est encore en To do. `append_to_issue` ajoute une section signée et datée à la fin des notes, sans écraser une modification faite entre-temps. Rien ne permet de supprimer.
+- `edit_issue_body` réécrit les notes d'une issue, par remplacements exacts ou en entier, seulement si l'issue n'a pas changé depuis que l'agent l'a lue (`updated_at` attendu). Il refuse de retirer un lien d'image sauf demande explicite. Chaque fois que l'agent modifie les notes d'une issue, l'ancienne version est gardée dans `issue_body_history` (migration 014, 20 dernières par issue). Pour restaurer, dans le SQL Editor :
+  ```
+  select id, saved_at, left(body, 80) from issue_body_history where issue_id = '<id complet>' order by id desc;
+  update issues set body = (select body from issue_body_history where id = <n>) where id = '<id complet>';
+  ```
 - Prompt `work_next_issue(project)` : prend la To do la plus urgente qui n'attend rien, la réserve, la traite, consigne le résultat et le commit, puis la passe en Done.
 - Limite : une fiche ouverte dans l'app enregistre à la fermeture et peut écraser un ajout de l'agent fait pendant qu'elle était ouverte.
 - Test à la main : `cd mcp && npm run inspect` (MCP Inspector), `npm run typecheck`.

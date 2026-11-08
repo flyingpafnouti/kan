@@ -268,6 +268,63 @@ export async function appendToIssue(session: Session, ref: string, text: string)
   throw new UserError('The issue keeps changing while appending: try again later')
 }
 
+export interface BodyEdit {
+  old: string
+  new: string
+}
+
+export type BodyChange = { edits: BodyEdit[]; body?: undefined } | { body: string; edits?: undefined }
+
+/** Longest body a rewrite may produce, unless the issue already had a longer one. */
+const BODY_MAX = 20000
+
+/** Image links of the app (src/lib/images.ts): the agent cannot upload, so a dropped one is lost to it. */
+const imageLinks = (body: string) => new Set(body.match(/note-image:[^)\s]+/g) ?? [])
+
+function applyEdits(body: string, edits: BodyEdit[]) {
+  return edits.reduce((text, edit, i) => {
+    const where = edits.length > 1 ? `edit ${i + 1}: ` : ''
+    if (!edit.old) throw new UserError(`${where}empty old text`)
+    const count = text.split(edit.old).length - 1
+    if (!count) throw new UserError(`${where}old text not found (after the previous edits): copy it exactly from get_issue`)
+    if (count > 1) throw new UserError(`${where}old text found ${count} times: include more context to make it unique`)
+    // A function, so that $ in the new text stays literal.
+    return text.replace(edit.old, () => edit.new)
+  }, body)
+}
+
+/**
+ * Rewrites the body, by exact replacements or whole, only if the issue is still the version the agent read
+ * (`expected` is its updated_at): no retry, the agent has to read it again. The former body lands in
+ * issue_body_history (migration 014).
+ */
+export async function editIssueBody(session: Session, ref: string, expected: string, change: BodyChange, dropImages = false) {
+  if ((change.edits === undefined) === (change.body === undefined)) throw new UserError('Give exactly one of edits and body')
+  if (Number.isNaN(Date.parse(expected))) throw new UserError(`expected_updated_at: "${expected}" is not a timestamp`)
+  const issue = await resolveIssue(session, ref)
+  const stale = () =>
+    new UserError(`#${shortId(issue.id)} changed since it was read: read it again with get_issue, then redo the edit`)
+  if (Date.parse(issue.updated_at) !== Date.parse(expected)) throw stale()
+  const next = change.body ?? applyEdits(issue.body, change.edits)
+  if (next === issue.body) throw new UserError('Nothing to change')
+  if (!next.trim()) throw new UserError('The body would be empty')
+  if (next.length > Math.max(BODY_MAX, issue.body.length)) throw new UserError(`The body would exceed ${BODY_MAX} characters`)
+  if (!dropImages) {
+    const lost = [...imageLinks(issue.body)].filter((link) => !next.includes(link))
+    if (lost.length) {
+      throw new UserError(
+        `The new body drops ${lost.length} image link(s) (${lost.join(', ')}). Keep them, or pass drop_images: true if ` +
+          'removing them is intended',
+      )
+    }
+  }
+  const rows = check(
+    await session.db.from('issues').update({ body: next }).eq('id', issue.id).eq('updated_at', expected).select(COLUMNS),
+  ) as Issue[]
+  if (!rows.length) throw stale()
+  return rows[0]
+}
+
 /** To do → In progress, only if it is still in To do: of two agents claiming it at once, one gets it. */
 export async function claimIssue(session: Session, ref: string) {
   const issue = await resolveIssue(session, ref)
