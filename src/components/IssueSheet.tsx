@@ -17,6 +17,17 @@ import { IssueLinks, type LinkPick } from './IssueLinks'
 import { SearchPalette } from './SearchPalette'
 import { blockerCandidates, parentCandidates, type IssueIndex } from '../lib/dependencies'
 
+/** Title as a heading, then the notes, as Markdown: ready to paste into a chat or a document. */
+async function copyIssue(title: string, body: string) {
+  try {
+    await navigator.clipboard.writeText(body.trim() ? `# ${title}\n\n${body.trim()}\n` : `${title}\n`)
+    toast('Issue copied')
+  } catch {
+    // No clipboard outside secure contexts, such as the dev server opened from the phone.
+    toast('Copy failed')
+  }
+}
+
 interface Props {
   issue: Issue
   /** Every issue the board knows, for the links. */
@@ -422,6 +433,16 @@ export function IssueSheet({
             >
               {confirmDelete ? 'Confirm deletion' : 'Delete'}
             </button>
+            {!confirmDelete && (
+              <button
+                onClick={() => copyIssue(title.trim() || issue.title, body)}
+                // A link still uploading is not in the text yet.
+                disabled={uploading > 0}
+                className="shrink-0 py-1 text-sm text-neutral-400 hover:text-neutral-600 disabled:opacity-50 dark:hover:text-neutral-300"
+              >
+                Copy
+              </button>
+            )}
             <div className="ml-auto flex min-w-0 items-center gap-2">
               {!linked && !linking && (
                 <button
