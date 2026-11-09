@@ -14,7 +14,7 @@ export interface IssueIndex {
 }
 
 /** `#` and the first 8 characters of an issue id, as the MCP agent writes them in a body. */
-const ISSUE_REF = /(?<![\w&#])#([0-9a-f]{8})(?![\w-])/g
+export const ISSUE_REF = /(?<![\w&#])#([0-9a-f]{8})(?![\w-])/g
 
 /** The issue a reference names, if the index knows it. */
 export const refTarget = (short: string, { byShort }: IssueIndex) => byShort.get(short) ?? undefined

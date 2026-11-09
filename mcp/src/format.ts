@@ -28,7 +28,7 @@ export function issueList(project: Project, issues: ListedIssue[], hiddenDone: n
   return `${head}\n${lines.join('\n')}${tail}`.trimEnd()
 }
 
-export function issueDetail({ issue, project, parent, blockers, editor }: IssueDetail) {
+export function issueDetail({ issue, project, parent, blockers, references, editor }: IssueDetail) {
   const lines = [
     `# ${issue.title}`,
     `id: ${issue.id}`,
@@ -42,6 +42,7 @@ export function issueDetail({ issue, project, parent, blockers, editor }: IssueD
     const open = blockers.filter((x) => x.status !== 'done').length
     lines.push(`waits for (${open} open of ${blockers.length}):`, ...blockers.map((x) => `  ${issueLine(x)}`))
   }
+  if (references.length) lines.push('cited in the body:', ...references.map((x) => `  ${issueLine(x)}`))
   lines.push('', issue.body.trim() || '(empty body)')
   return lines.join('\n')
 }

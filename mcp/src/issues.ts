@@ -2,6 +2,7 @@ import type { PostgrestError } from '@supabase/supabase-js'
 import type { Session } from './client'
 import type { Issue, Priority, Project, Status } from '../../src/lib/types'
 import { between } from '../../src/lib/position'
+import { ISSUE_REF } from '../../src/lib/dependencies'
 
 /** A failure to report to the agent as is, as opposed to a bug. */
 export class UserError extends Error {}
@@ -118,13 +119,16 @@ export interface IssueDetail {
   project: Project
   parent: Brief | null
   blockers: Brief[]
+  /** Issues the body cites as #a1b2c3d4, in order of first mention. */
+  references: Brief[]
   editor: string | null
 }
 
 export async function getIssue(session: Session, ref: string): Promise<IssueDetail> {
   const { db } = session
   const issue = await resolveIssue(session, ref)
-  const [project, parent, blockers, editor] = await Promise.all([
+  const shorts = [...new Set([...issue.body.matchAll(ISSUE_REF)].map((m) => m[1]))]
+  const [project, parent, blockers, editor, siblings] = await Promise.all([
     db.from('projects').select('id, name, position, created_at').eq('id', issue.project_id).single(),
     issue.parent_id
       ? db.from('issues').select('id, title, status, priority, position, parent_id, updated_at').eq('id', issue.parent_id).maybeSingle()
@@ -133,12 +137,18 @@ export async function getIssue(session: Session, ref: string): Promise<IssueDeta
     issue.updated_by
       ? db.from('profiles').select('pseudo').eq('user_id', issue.updated_by).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    shorts.length ? projectIssues(session, issue.project_id) : Promise.resolve([] as Brief[]),
   ])
+  const references = shorts.flatMap((short) => {
+    const matches = siblings.filter((x) => x.id.startsWith(short))
+    return matches.length === 1 ? matches : []
+  })
   return {
     issue,
     project: check(project) as Project,
     parent: check(parent) as Brief | null,
     blockers: (check(blockers) as Brief[]).sort((a, b) => Number(a.status === 'done') - Number(b.status === 'done')),
+    references,
     editor: (check(editor) as { pseudo: string } | null)?.pseudo ?? null,
   }
 }
