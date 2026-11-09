@@ -56,6 +56,8 @@ export function Board({ projectId }: { projectId: string }) {
   const [sort, setSort] = useState<Sort>(() => readSort(readCache(sortKey(projectId))))
   const [openId, setOpenId] = useState<string | null>(getPendingOpen)
   const [searching, setSearching] = useState(false)
+  /** The issue just added from the quick field: it opens ready for its description. */
+  const [created, setCreated] = useState<string | null>(null)
   useEffect(clearPendingOpen, [])
   // Issue reached with the sheet's previous / next: shown without the opening animation.
   const [steppedTo, setSteppedTo] = useState<string | null>(null)
@@ -138,8 +140,12 @@ export function Board({ projectId }: { projectId: string }) {
   }
 
   function handleAdd(title: string) {
-    add(title)
+    const id = add(title)
     setTab('todo')
+    if (!id) return
+    setCreated(id)
+    setSelected(id)
+    setOpenId(id)
   }
 
   const open = openId ? find(openId) : undefined
@@ -321,10 +327,14 @@ export function Board({ projectId }: { projectId: string }) {
               remove({ ...open, ...text })
               setOpenId(null)
             }}
-            onClose={() => setOpenId(null)}
+            onClose={() => {
+              setOpenId(null)
+              setCreated(null)
+            }}
             onPrev={prev && (() => step(prev.id))}
             onNext={next && (() => step(next.id))}
             instant={open.id === steppedTo}
+            startEditing={open.id === created}
             pane={sheet.pane}
             onLock={sheet.onLock}
             projects={projects}

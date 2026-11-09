@@ -49,6 +49,8 @@ interface Props {
   onNext?: () => void
   /** Reached from a neighbour: no opening animation. */
   instant?: boolean
+  /** Just created: the caret goes straight into the description. */
+  startEditing?: boolean
   /** What a swipe moves, and tells the swipe when not to: see useIssueSwipe. */
   pane: RefObject<HTMLDivElement | null>
   onLock: (locked: boolean) => void
@@ -71,6 +73,7 @@ export function IssueSheet({
   onPrev,
   onNext,
   instant,
+  startEditing,
   pane,
   onLock,
   projects,
@@ -100,7 +103,7 @@ export function IssueSheet({
   /** Links of the images on their way to the server. */
   const pending = useRef(new Set<string>())
   /** Where the caret goes on the way to Edit. Unset when the sheet opens: no keyboard popping up on a phone. */
-  const caret = useRef<Caret>(undefined)
+  const caret = useRef<Caret>(startEditing ? { start: issue.body.length } : undefined)
   const saved = useRef({ title: issue.title, body: issue.body })
   const latest = useRef({ title, body })
   latest.current = { title, body }

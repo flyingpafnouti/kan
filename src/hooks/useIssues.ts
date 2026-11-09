@@ -85,8 +85,9 @@ export function useIssues(projectId: string | null) {
     [issues],
   )
 
+  /** Returns the new issue's id. */
   const add = useCallback(
-    (title: string) => {
+    (title: string): string | undefined => {
       if (!projectId) return
       const now = new Date().toISOString()
       const row: Issue = {
@@ -103,6 +104,7 @@ export function useIssues(projectId: string | null) {
       }
       setIssues((list) => [...(list ?? []), row])
       enqueue({ table: 'issues', id: row.id, kind: 'upsert', data: { ...row } })
+      return row.id
     },
     [projectId, column],
   )
