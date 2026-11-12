@@ -227,6 +227,64 @@
 .md .math-display mjx-container[display="true"] {
   margin: 0.4em 0;
 }
+/* Exercise boxes from the course generator (src/lib/format.ts). */
+.md .exercise {
+  padding: 0.8em 1em;
+  border: 1px solid color-mix(in oklab, var(--color-amber-400) 60%, transparent);
+  border-left-width: 5px;
+  border-radius: 0.6em;
+  background: color-mix(in oklab, var(--color-amber-300) 12%, transparent);
+}
+.md .exercise > * + * {
+  margin-top: 0.6em;
+}
+.md .ex-title {
+  font-weight: 700;
+}
+.md .ex-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+.md .ex-btn {
+  padding: 0.3em 0.8em;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 0.5em;
+  background: white;
+  font-weight: 500;
+  cursor: pointer;
+}
+.md .ex-btn:hover:not(:disabled),
+.md .ex-btn.open {
+  border-color: var(--color-accent);
+}
+.md .ex-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dark .md .ex-btn {
+  border-color: var(--color-neutral-800);
+  background: var(--color-neutral-950);
+}
+.md .ex-pane {
+  padding: 0.6em 0.9em;
+  border-radius: 0.5em;
+}
+.md .ex-pane > * + * {
+  margin-top: 0.5em;
+}
+.md .ex-hint {
+  background: color-mix(in oklab, var(--color-sky-400) 14%, transparent);
+}
+.md .ex-solution {
+  background: color-mix(in oklab, var(--color-green-400) 14%, transparent);
+}
+.md .ex-label {
+  font-size: 0.8em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
 .mermaid-block {
   position: relative;
 }

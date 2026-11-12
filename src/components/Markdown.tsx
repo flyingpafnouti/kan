@@ -18,6 +18,20 @@ async function copyCode(button: Element) {
   }
 }
 
+/** Shows or hides an exercise's hint or solution; opening the hint unlocks the solution. */
+function toggleExercisePane(button: HTMLButtonElement) {
+  const box = button.closest('.exercise')!
+  const pane = button.dataset.pane!
+  const el = box.querySelector<HTMLElement>(`:scope > .ex-${pane}`)
+  if (!el) return
+  el.hidden = !el.hidden
+  button.classList.toggle('open', !el.hidden)
+  if (pane === 'hint') {
+    const solution = box.querySelector<HTMLButtonElement>(':scope > .ex-actions > [data-pane="solution"]')
+    if (solution) solution.disabled = false
+  }
+}
+
 /** Rendered Markdown; MathJax, Mermaid and highlight.js are fetched the first time a text needs them. */
 export function Markdown({
   text,
@@ -64,6 +78,12 @@ export function Markdown({
       className={`md ${className}`}
       dangerouslySetInnerHTML={{ __html: html }}
       onClick={(e) => {
+        const exercise = (e.target as Element).closest<HTMLButtonElement>('.ex-btn')
+        if (exercise) {
+          // Not a click on what holds the text: in the list, that would open the note.
+          e.stopPropagation()
+          return toggleExercisePane(exercise)
+        }
         const copy = (e.target as Element).closest('.code-copy')
         if (!copy) return onClick?.(e)
         // Not a click on what holds the text: in the list, that would open the note.
@@ -505,7 +525,7 @@ export function ResizableMarkdown({
           if (handle) return onImageWidth(pathOf(handle.parentElement!), null)
           const target = e.target as HTMLElement
           // These already do something on a click.
-          if (!onEditAt || target.closest('a, button, .note-image, .mermaid-block, .mermaid-placeholder')) return
+          if (!onEditAt || target.closest('a, button, .ex-actions, .note-image, .mermaid-block, .mermaid-placeholder')) return
           const at = sourceSelection(text, e.currentTarget, target)
           if (at) onEditAt({ ...at, y: e.clientY })
         }}
