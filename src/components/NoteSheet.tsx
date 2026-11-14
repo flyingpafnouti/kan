@@ -11,9 +11,10 @@ import { AutoTextarea, placeCaret, type Caret } from './AutoTextarea'
 import { ModeSwitch, type Mode } from './Switch'
 import { DictationButton } from './DictationButton'
 import { PostProcessButton } from './PostProcessButton'
-import { DrawIcon } from './icons'
+import { CloseIcon, DrawIcon, ExpandIcon } from './icons'
 import { SheetGrip, useSheetSize } from './SheetResize'
 import { KindSwitch } from './KindSwitch'
+import { isAndroid } from '../lib/device'
 
 interface Props {
   note: Note
@@ -30,6 +31,9 @@ interface Props {
 
 /** fabric comes with the editor, only once a drawing is opened. */
 const DrawingEditor = lazy(() => import('./DrawingEditor'))
+
+/** Phones and tablets alike: Android can read a note on the whole screen, without the system bars. */
+const canFullScreen = isAndroid()
 
 export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDelete, onToIssue, onClose }: Props) {
   const [body, setBody] = useState(note.body)
@@ -51,6 +55,33 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
   const pending = useRef(new Set<string>())
   /** The drawing being edited: a new one, or the path of the one it replaces. */
   const [drawing, setDrawing] = useState<{ path?: string; data?: DrawingData } | null>(null)
+  /** The note alone on the screen, with a cross to come back to the sheet. */
+  const [full, setFull] = useState(false)
+  const scroller = useRef<HTMLDivElement>(null)
+
+  // The panel covers the window even if the browser refuses its own full screen.
+  const enterFull = () => {
+    setFull(true)
+    document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {})
+  }
+  const leaveFull = () => {
+    setFull(false)
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+  }
+  // Android's back gesture leaves the browser's full screen: the sheet comes back with it.
+  useEffect(() => {
+    if (!full) return
+    // The button sits under the text, so reaching it scrolled a long note to its end.
+    scroller.current?.scrollTo(0, 0)
+    const onChange = () => {
+      if (!document.fullscreenElement) setFull(false)
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange)
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+    }
+  }, [full])
 
   // Saved once, on close, rather than while typing. An emptied note is not saved (the server refuses it)
   // and goes away on close.
@@ -202,6 +233,7 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
       // Escape, or Ctrl / ⌘ + Enter from the text.
       if (e.key !== 'Escape' && !(e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing)) return
       e.preventDefault()
+      if (full && e.key === 'Escape') return leaveFull()
       close()
     }
     addEventListener('keydown', onKey)
@@ -227,11 +259,31 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
           e.preventDefault()
           void attachImages(files)
         }}
-        style={sheetSize.style}
-        className="relative flex max-h-[85dvh] w-full max-w-lg animate-sheet flex-col rounded-t-2xl bg-white pb-safe shadow-2xl md:rounded-2xl dark:bg-neutral-900"
+        style={full ? undefined : sheetSize.style}
+        className={`flex animate-sheet flex-col bg-white dark:bg-neutral-900 ${
+          full
+            ? 'fixed inset-0'
+            : 'relative max-h-[85dvh] w-full max-w-lg rounded-t-2xl pb-safe shadow-2xl md:rounded-2xl'
+        }`}
       >
-        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300 md:hidden dark:bg-neutral-700" />
-        <div className="flex-1 overflow-y-auto px-5 pt-4">
+        {full ? (
+          <button
+            type="button"
+            aria-label="Leave full screen"
+            onClick={leaveFull}
+            style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
+            className="absolute right-2 z-10 rounded-full bg-white/70 p-2 text-neutral-400 backdrop-blur-sm dark:bg-neutral-900/70 dark:text-neutral-500"
+          >
+            <CloseIcon width={18} height={18} />
+          </button>
+        ) : (
+          <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-neutral-300 md:hidden dark:bg-neutral-700" />
+        )}
+        <div
+          ref={scroller}
+          style={full ? { paddingTop: 'calc(env(safe-area-inset-top) + 3rem)' } : undefined}
+          className={`flex-1 overflow-y-auto px-5 ${full ? 'pb-[max(env(safe-area-inset-bottom),2rem)]' : 'pt-4'}`}
+        >
           {mode === 'read' && body.trim() ? (
             <ResizableMarkdown
               text={body}
@@ -262,74 +314,89 @@ export function NoteSheet({ note, startEditing, projects, onSave, onKind, onDele
               }
             />
           )}
-          <div className="flex items-center justify-between gap-2 py-2">
-            <p className="text-xs text-neutral-400">
-              {uploading
-                ? 'Uploading image…'
-                : dictation.state === 'transcribing'
-                  ? 'Transcribing…'
-                  : `Edited ${formatDate(note.updated_at)}`}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                aria-label="Draw"
-                title="Draw"
-                onClick={() => void openDrawing()}
-                className="rounded-full p-1.5 text-neutral-300 transition hover:text-neutral-500 dark:text-neutral-600 dark:hover:text-neutral-400"
-              >
-                <DrawIcon width={16} height={16} />
-              </button>
-              <ModeSwitch label="Note mode" value={mode} onChange={setMode} />
-              {dictationSupported && (
-                <DictationButton dictation={dictation} label="Dictate">
-                  <PostProcessButton text={body} onResult={setBody} />
-                </DictationButton>
-              )}
+          {!full && (
+            <div className="flex items-center justify-between gap-2 py-2">
+              <p className="text-xs text-neutral-400">
+                {uploading
+                  ? 'Uploading image…'
+                  : dictation.state === 'transcribing'
+                    ? 'Transcribing…'
+                    : `Edited ${formatDate(note.updated_at)}`}
+              </p>
+              <div className="flex items-center gap-2">
+                {canFullScreen && (
+                  <button
+                    type="button"
+                    aria-label="Full screen"
+                    title="Full screen"
+                    onClick={enterFull}
+                    className="rounded-full p-1.5 text-neutral-300 transition hover:text-neutral-500 dark:text-neutral-600 dark:hover:text-neutral-400"
+                  >
+                    <ExpandIcon width={16} height={16} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label="Draw"
+                  title="Draw"
+                  onClick={() => void openDrawing()}
+                  className="rounded-full p-1.5 text-neutral-300 transition hover:text-neutral-500 dark:text-neutral-600 dark:hover:text-neutral-400"
+                >
+                  <DrawIcon width={16} height={16} />
+                </button>
+                <ModeSwitch label="Note mode" value={mode} onChange={setMode} />
+                {dictationSupported && (
+                  <DictationButton dictation={dictation} label="Dictate">
+                    <PostProcessButton text={body} onResult={setBody} />
+                  </DictationButton>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
-          <button
-            onClick={() => {
-              if (!confirmDelete) return setConfirmDelete(true)
-              end()
-              onDelete()
-            }}
-            className="rounded-lg py-1 text-sm text-red-500"
-          >
-            {confirmDelete ? 'Confirm deletion' : 'Delete'}
-          </button>
-          <KindSwitch value={note.kind ?? 'pro'} onChange={onKind} />
-          {projects && projects.length > 0 && (
-            <select
-              value=""
-              disabled={!body.trim() || uploading > 0}
-              onChange={(e) => {
-                end()
-                onToIssue(e.target.value, body)
-              }}
-              aria-label="Make it an issue"
-              className="ml-auto min-w-0 max-w-44 truncate rounded-xl bg-transparent py-1.5 pr-2 pl-3 font-medium text-accent ring-1 ring-accent/40 outline-none disabled:opacity-30"
-            >
-              <option value="" disabled>
-                To issue…
-              </option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
           )}
-          <button
-            onClick={close}
-            className={`${projects?.length ? '' : 'ml-auto'} shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900`}
-          >
-            Close
-          </button>
         </div>
-        <SheetGrip {...sheetSize} />
+        {!full && (
+          <div className="flex items-center gap-2 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
+            <button
+              onClick={() => {
+                if (!confirmDelete) return setConfirmDelete(true)
+                end()
+                onDelete()
+              }}
+              className="rounded-lg py-1 text-sm text-red-500"
+            >
+              {confirmDelete ? 'Confirm deletion' : 'Delete'}
+            </button>
+            <KindSwitch value={note.kind ?? 'pro'} onChange={onKind} />
+            {projects && projects.length > 0 && (
+              <select
+                value=""
+                disabled={!body.trim() || uploading > 0}
+                onChange={(e) => {
+                  end()
+                  onToIssue(e.target.value, body)
+                }}
+                aria-label="Make it an issue"
+                className="ml-auto min-w-0 max-w-44 truncate rounded-xl bg-transparent py-1.5 pr-2 pl-3 font-medium text-accent ring-1 ring-accent/40 outline-none disabled:opacity-30"
+              >
+                <option value="" disabled>
+                  To issue…
+                </option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={close}
+              className={`${projects?.length ? '' : 'ml-auto'} shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900`}
+            >
+              Close
+            </button>
+          </div>
+        )}
+        {!full && <SheetGrip {...sheetSize} />}
       </div>
     </div>
   )
