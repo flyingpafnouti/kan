@@ -8,7 +8,8 @@ import { clearImages } from './images'
 export async function signOut() {
   const n = pendingCount()
   if (n && !confirm(`${n} unsynced change(s) will be lost. Sign out?`)) return
-  await supabase.auth.signOut()
+  // The default scope revokes every session of the account, on all devices.
+  await supabase.auth.signOut({ scope: 'local' })
   clearOutbox()
   clearCache()
   await clearImages()
