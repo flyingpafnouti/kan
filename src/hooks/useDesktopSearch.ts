@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { DESKTOP_SEARCH_QUERY, isAndroid } from '../lib/desktopSearch'
+import { DESKTOP_SEARCH_QUERY } from '../lib/desktopSearch'
+import { isAndroid } from '../lib/device'
 import { useMediaQuery } from './useMediaQuery'
 
 /** Whether this device gets the hybrid search. Its code is fetched ahead, so the first "/" does not lose keystrokes. */
