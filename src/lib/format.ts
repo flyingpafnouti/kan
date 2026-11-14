@@ -81,6 +81,91 @@ md.renderer.rules.math_inline = (tokens, i) =>
 md.renderer.rules.math_block = (tokens, i) =>
   `<div class="math math-display" data-line="${tokens[i].map![0]}">${escape(tokens[i].content)}</div>\n`
 
+/*
+ * Exercise boxes, as written by the course generator (~/custom-course):
+ *   :::exercise Title
+ *   statement
+ *   :::hint
+ *   …
+ *   :::solution
+ *   …
+ *   :::end
+ * The hint and solution stay hidden behind buttons, toggled by the Markdown component. A box without :::end stays text.
+ */
+type ExercisePane = 'hint' | 'solution'
+const PANE_LABEL: Record<ExercisePane, string> = { hint: 'Indication', solution: 'Solution' }
+const PANE_ICON: Record<ExercisePane, string> = { hint: '💡', solution: '✅' }
+
+function exerciseBlock(state: StateBlock, startLine: number, endLine: number, silent: boolean): boolean {
+  const lineText = (n: number) => state.src.slice(state.bMarks[n] + state.tShift[n], state.eMarks[n]).trim()
+  if (state.sCount[startLine] - state.blkIndent >= 4) return false
+  const head = lineText(startLine).match(/^:::exercise(?:\s+(.*))?$/)
+  if (!head) return false
+  const marks: { pane: ExercisePane; line: number }[] = []
+  let end = -1
+  for (let n = startLine + 1; n < endLine; n++) {
+    const text = lineText(n)
+    if (text === ':::end') {
+      end = n
+      break
+    }
+    const pane = text.match(/^:::(hint|solution)$/)?.[1] as ExercisePane | undefined
+    if (pane && !marks.some((m) => m.pane === pane)) marks.push({ pane, line: n })
+  }
+  if (end === -1) return false
+  if (silent) return true
+
+  const tokenize = (from: number, to: number) => {
+    const { parentType, lineMax } = state
+    state.parentType = 'exercise' as typeof parentType
+    state.lineMax = to
+    state.md.block.tokenize(state, from, to)
+    state.lineMax = lineMax
+    state.parentType = parentType
+  }
+  const open = state.push('exercise_open', 'section', 1)
+  open.block = true
+  open.map = [startLine, end + 1]
+  open.info = head[1]?.trim() || 'Exercice'
+  tokenize(startLine + 1, marks[0]?.line ?? end)
+  if (marks.length) {
+    const actions = state.push('exercise_actions', '', 0)
+    actions.meta = { panes: marks.map((m) => m.pane) }
+  }
+  marks.forEach((m, k) => {
+    const pane = state.push('exercise_pane_open', 'div', 1)
+    pane.meta = { pane: m.pane }
+    tokenize(m.line + 1, marks[k + 1]?.line ?? end)
+    state.push('exercise_pane_close', 'div', -1)
+  })
+  state.push('exercise_close', 'section', -1)
+  state.line = end + 1
+  return true
+}
+
+md.block.ruler.before('fence', 'exercise', exerciseBlock, { alt: ['paragraph', 'reference', 'blockquote', 'list'] })
+
+md.renderer.rules.exercise_open = (tokens, i, _options, env, self) => {
+  tokens[i].attrJoin('class', 'exercise')
+  return `<section${self.renderAttrs(tokens[i])}><div class="ex-title">✏️ Exercice — ${md.renderInline(tokens[i].info, env)}</div>\n`
+}
+md.renderer.rules.exercise_close = () => '</section>\n'
+md.renderer.rules.exercise_actions = (tokens, i) => {
+  const panes = (tokens[i].meta as { panes: ExercisePane[] }).panes
+  const buttons = panes.map(
+    (pane) =>
+      // The solution waits for the hint to be opened, as in the course app.
+      `<button type="button" class="ex-btn" data-pane="${pane}"${pane === 'solution' && panes.includes('hint') ? ' disabled' : ''}>` +
+      `${PANE_ICON[pane]} ${PANE_LABEL[pane]}</button>`,
+  )
+  return `<div class="ex-actions">${buttons.join('')}</div>\n`
+}
+md.renderer.rules.exercise_pane_open = (tokens, i) => {
+  const pane = (tokens[i].meta as { pane: ExercisePane }).pane
+  return `<div class="ex-pane ex-${pane}" hidden><div class="ex-label">${PANE_LABEL[pane]}</div>\n`
+}
+md.renderer.rules.exercise_pane_close = () => '</div>\n'
+
 /** hidden: a label stands for the diagram (note list). editable: it gets a button to its source. */
 export type DiagramMode = 'hidden' | 'shown' | 'editable'
 
